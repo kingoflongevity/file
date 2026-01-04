@@ -1,0 +1,29 @@
+appId: com.file-manager.ssh
+productName: SSH File Manager
+copyright: Copyright © 2026 ${author}
+
+# 构建目标
+win:
+  target: nsis
+  icon: build/icon.ico
+mac:
+  target: dmg
+  icon: build/icon.icns
+linux:
+  target: AppImage
+  icon: build/icon.png
+
+# 构建资源目录
+buildResources: build
+
+# 文件配置
+files:
+  - electron/**/*
+  - dist/**/*
+
+# 输出目录
+out: dist
+
+# 额外资源
+extraResources:
+  - server/dist/server

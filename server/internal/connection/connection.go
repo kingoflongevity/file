@@ -1,4 +1,4 @@
-package ssh
+package connection
 
 import (
 	"crypto/aes"
@@ -15,12 +15,12 @@ import (
 	"remote-file-manager/internal/database"
 	"remote-file-manager/internal/log"
 
+	"github.com/jlaffaye/ftp"
 	"golang.org/x/crypto/ssh"
 )
 
-// SSHCategory SSH分类
-
-type SSHCategory struct {
+// Category 连接分类
+type Category struct {
 	Name      string    `json:"name"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -59,7 +59,8 @@ type ConnectionManager struct {
 	cfg           *config.Config
 	connections   map[string]*Connection
 	sshClientPool map[string]*ssh.Client
-	categories    map[string]*SSHCategory
+	ftpClientPool map[string]*ftp.ServerConn
+	categories    map[string]*Category
 	poolMutex     sync.Mutex
 	encryptionKey []byte
 }
@@ -70,7 +71,8 @@ func NewConnectionManager(cfg *config.Config) *ConnectionManager {
 		cfg:           cfg,
 		connections:   make(map[string]*Connection),
 		sshClientPool: make(map[string]*ssh.Client),
-		categories:    make(map[string]*SSHCategory),
+		ftpClientPool: make(map[string]*ftp.ServerConn),
+		categories:    make(map[string]*Category),
 		encryptionKey: []byte(cfg.PasswordSalt[:32]), // 使用密码盐作为加密密钥
 	}
 
@@ -146,15 +148,15 @@ func (m *ConnectionManager) AddConnection(c *ssh.Client, conn *Connection) error
 }
 
 // GetConnections 获取所有连接
-func (m *ConnectionManager) GetConnections() []*Connection {
-	conns := make([]*Connection, 0, len(m.connections))
+func (m *ConnectionManager) GetConnections() []Connection {
+	conns := make([]Connection, 0, len(m.connections))
 	for _, conn := range m.connections {
 		// 返回时不包含敏感信息
 		connCopy := *conn
 		connCopy.Password = ""
 		connCopy.PrivateKey = ""
 		connCopy.Passphrase = ""
-		conns = append(conns, &connCopy)
+		conns = append(conns, connCopy)
 	}
 	return conns
 }
@@ -236,6 +238,10 @@ func (m *ConnectionManager) UpdateConnection(id string, conn *Connection) error 
 		client.Close()
 		delete(m.sshClientPool, id)
 	}
+	if client, exists := m.ftpClientPool[id]; exists {
+		client.Quit()
+		delete(m.ftpClientPool, id)
+	}
 	m.poolMutex.Unlock()
 
 	log.Info("Updated %s connection: %s", conn.Type, conn.Name)
@@ -264,6 +270,10 @@ func (m *ConnectionManager) DeleteConnection(id string) error {
 	if client, exists := m.sshClientPool[id]; exists {
 		client.Close()
 		delete(m.sshClientPool, id)
+	}
+	if client, exists := m.ftpClientPool[id]; exists {
+		client.Quit()
+		delete(m.ftpClientPool, id)
 	}
 	m.poolMutex.Unlock()
 
@@ -365,6 +375,73 @@ func (m *ConnectionManager) GetSSHClient(id string) (*ssh.Client, error) {
 	return client, nil
 }
 
+// GetFTPClient 获取FTP客户端连接
+func (m *ConnectionManager) GetFTPClient(id string) (*ftp.ServerConn, error) {
+	// 检查连接池
+	m.poolMutex.Lock()
+	client, exists := m.ftpClientPool[id]
+	m.poolMutex.Unlock()
+
+	if exists {
+		// 检查连接是否有效
+		if _, err := client.CurrentDir(); err == nil {
+			return client, nil
+		}
+		// 连接无效，移除
+		m.poolMutex.Lock()
+		delete(m.ftpClientPool, id)
+		m.poolMutex.Unlock()
+	}
+
+	// 获取连接配置
+	conn, exists := m.connections[id]
+	if !exists {
+		return nil, fmt.Errorf("connection not found: %s", id)
+	}
+
+	// 检查连接类型是否支持FTP
+	if conn.Type != ConnectionTypeFTP {
+		return nil, fmt.Errorf("connection type %s does not support FTP client", conn.Type)
+	}
+
+	// 解密敏感信息
+	password := m.decrypt(conn.Password)
+
+	// 建立FTP连接
+	addr := fmt.Sprintf("%s:%d", conn.Host, conn.Port)
+	client, err := ftp.Dial(addr, ftp.DialWithTimeout(30*time.Second))
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to %s: %v", addr, err)
+	}
+
+	// 登录FTP服务器
+	if err := client.Login(conn.Username, password); err != nil {
+		client.Quit()
+		return nil, fmt.Errorf("failed to login to FTP server: %v", err)
+	}
+
+	// 添加到连接池
+	m.poolMutex.Lock()
+	m.ftpClientPool[id] = client
+	m.poolMutex.Unlock()
+
+	// 更新连接的最后使用时间
+	conn.LastUsed = time.Now()
+
+	// 更新到数据库
+	_, err = database.DB.Exec(`
+		UPDATE ssh_connections 
+		SET last_used = ?
+		WHERE id = ?
+	`, conn.LastUsed, conn.ID)
+	if err != nil {
+		log.Error("Failed to update connection last_used: %v", err)
+	}
+
+	log.Info("Established %s connection to %s", conn.Type, addr)
+	return client, nil
+}
+
 // GetClient 获取SSH客户端连接（兼容旧代码）
 func (m *ConnectionManager) GetClient(id string) (*ssh.Client, error) {
 	return m.GetSSHClient(id)
@@ -395,8 +472,20 @@ func (m *ConnectionManager) TestConnection(id string) error {
 		m.poolMutex.Unlock()
 
 	case ConnectionTypeFTP:
-		// TODO: 实现FTP连接测试
-		return fmt.Errorf("FTP connection testing not implemented yet")
+		// 测试FTP连接
+		client, err := m.GetFTPClient(id)
+		if err != nil {
+			return err
+		}
+
+		// 关闭连接
+		client.Quit()
+
+		// 从连接池中移除
+		m.poolMutex.Lock()
+		delete(m.ftpClientPool, id)
+		m.poolMutex.Unlock()
+
 	default:
 		return fmt.Errorf("unknown connection type: %s", conn.Type)
 	}
@@ -414,6 +503,13 @@ func (m *ConnectionManager) CloseAllConnections() {
 		client.Close()
 		delete(m.sshClientPool, id)
 		log.Info("Closed SSH connection: %s", id)
+	}
+
+	// 关闭所有FTP客户端连接
+	for id, client := range m.ftpClientPool {
+		client.Quit()
+		delete(m.ftpClientPool, id)
+		log.Info("Closed FTP connection: %s", id)
 	}
 }
 
@@ -497,11 +593,11 @@ func (m *ConnectionManager) loadCategories() {
 	defer rows.Close()
 
 	// 清空现有分类
-	m.categories = make(map[string]*SSHCategory)
+	m.categories = make(map[string]*Category)
 
 	// 遍历结果集
 	for rows.Next() {
-		var category SSHCategory
+		var category Category
 
 		// 扫描行数据到分类结构体
 		err := rows.Scan(
@@ -533,8 +629,8 @@ func (m *ConnectionManager) saveCategories() {
 }
 
 // GetCategories 获取所有分类
-func (m *ConnectionManager) GetCategories() []*SSHCategory {
-	categories := make([]*SSHCategory, 0, len(m.categories))
+func (m *ConnectionManager) GetCategories() []*Category {
+	categories := make([]*Category, 0, len(m.categories))
 	for _, category := range m.categories {
 		categories = append(categories, category)
 	}
@@ -555,7 +651,7 @@ func (m *ConnectionManager) AddCategory(name string) error {
 
 	// 创建新分类
 	now := time.Now()
-	category := &SSHCategory{
+	category := &Category{
 		Name:      name,
 		CreatedAt: now,
 		UpdatedAt: now,

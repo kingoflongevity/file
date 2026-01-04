@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"file-manager/internal/log"
+	"remote-file-manager/internal/log"
 
 	"github.com/gin-gonic/gin"
 )
@@ -128,7 +128,7 @@ func RequestLogger() gin.HandlerFunc {
 		status := c.Writer.Status()
 
 		// 记录日志
-		log.Info("%s %s %d %s %s", method, path, status, latency, ip)
+		log.Info("%s %s %d %v %s", method, path, status, latency, ip)
 	}
 }
 

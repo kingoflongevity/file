@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { fileApi, sshApi } from '../services/api';
 import {
@@ -20,6 +20,7 @@ import {
 } from 'antd';
 import {
   ArrowLeftOutlined, 
+  DashboardOutlined,
   PlusOutlined, 
   UploadOutlined, 
   DeleteOutlined, 
@@ -42,6 +43,11 @@ const FileManager = () => {
   // 获取当前路径，从路由参数中提取
   const currentPath = location.pathname.replace(`/files/${connId}`, '') || '/';
   
+  // 响应式设计状态
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 576);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [tableHeight, setTableHeight] = useState(window.innerHeight - 350);
+  
   const [files, setFiles] = useState([]);
   const [filteredFiles, setFilteredFiles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,6 +59,23 @@ const FileManager = () => {
   const [newDirName, setNewDirName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [form] = Form.useForm();
+  // 下载相关状态
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  
+  // 监听窗口大小变化
+  useEffect(() => {
+    const handleResize = () => {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      setWindowWidth(width);
+      setIsMobile(width < 576);
+      setTableHeight(height - 350); // 更新表格高度
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   
   // 过滤文件
   useEffect(() => {
@@ -245,13 +268,67 @@ const FileManager = () => {
   };
 
   // 处理文件下载
-  const handleDownload = (file) => {
+  const handleDownload = async (file) => {
     try {
-      fileApi.downloadFile(connId, file.path);
-      message.success('文件下载开始');
+      const response = await fileApi.downloadFile(connId, file.path);
+      // 如果返回的是任务ID，说明创建了压缩任务
+      if (response && response.taskId) {
+        message.success('下载任务已创建，请查看通知');
+      } else {
+        // 单个文件下载成功
+        message.success('文件下载开始');
+      }
     } catch (err) {
       console.error('下载文件失败:', err);
       message.error(err.message || '下载文件失败');
+    }
+  };
+
+  // 处理批量下载
+  const handleBatchDownload = async () => {
+    if (selectedFiles.length === 0) {
+      message.error('请先选择要下载的文件');
+      return;
+    }
+
+    try {
+      setIsDownloading(true);
+      setDownloadProgress(0);
+
+      // 逐个下载文件，使用Promise.allSettled确保所有文件都被处理
+      const downloadPromises = selectedFiles.map((file, index) => {
+        return new Promise((resolve, reject) => {
+          try {
+            // 调用单个文件下载API
+            fileApi.downloadFile(connId, file.path);
+            // 更新进度
+            setDownloadProgress(Math.round(((index + 1) / selectedFiles.length) * 100));
+            resolve(file.name);
+          } catch (err) {
+            reject({ file: file.name, error: err });
+          }
+        });
+      });
+
+      // 等待所有下载操作完成
+      const results = await Promise.allSettled(downloadPromises);
+
+      // 统计成功和失败的下载
+      const successful = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
+
+      // 显示结果
+      let messageText = `成功下载 ${successful} 个文件`;
+      if (failed > 0) {
+        messageText += `，${failed} 个文件下载失败`;
+      }
+      message.success(messageText);
+    } catch (err) {
+      console.error('批量下载失败:', err);
+      message.error(err.message || '批量下载失败');
+    } finally {
+      setIsDownloading(false);
+      setDownloadProgress(0);
     }
   };
 
@@ -332,12 +409,17 @@ const FileManager = () => {
       dataIndex: 'name',
       key: 'name',
       render: (text, record) => (
-        <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
           <Avatar 
             icon={record.is_dir ? <FolderOutlined style={{ color: '#faad14' }} /> : <FileOutlined />} 
             style={{ marginRight: 8 }} 
           />
-          <span>{text}</span>
+          <span 
+            style={{ cursor: 'pointer' }}
+            onClick={() => handleFileClick(record)}
+          >
+            {text}
+          </span>
           {record.symlink && (
             <span style={{ marginLeft: 8, fontSize: 12, color: '#999' }}>
               → {record.symlink}
@@ -401,26 +483,36 @@ const FileManager = () => {
   ];
 
   return (
-    <div style={{ padding: 24 }}>
-      {/* 页面标题和连接信息 */}
-      <Card style={{ marginBottom: 16 }}>
-        <div style={{ marginBottom: 16 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 8 }}>文件管理器</h1>
-          {sshConn && (
-            <p style={{ color: '#666' }}>
-              连接: {sshConn.name} ({sshConn.username}@{sshConn.host}:{sshConn.port})
-            </p>
-          )}
+    <div style={{ padding: 0, height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* 合并的顶部卡片：标题、连接信息、导航和操作工具栏 */}
+      <Card style={{ margin: 0, marginBottom: 16 }}>
+        {/* 标题、连接信息和返回按钮 */}
+        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <h1 style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 8 }}>文件管理器</h1>
+            {sshConn && (
+              <p style={{ color: '#666', margin: 0 }}>
+                连接: {sshConn.name} ({sshConn.username}@{sshConn.host}:{sshConn.port})
+              </p>
+            )}
+          </div>
+          <Button 
+            type="default" 
+            icon={<DashboardOutlined />} 
+            onClick={() => navigate('/')}
+          >
+            返回首页
+          </Button>
         </div>
 
         {/* 文件路径导航 */}
-        <Breadcrumb>
+        <Breadcrumb style={{ marginBottom: 16 }}>
           <Breadcrumb.Item>
             <Button 
               type="text" 
               icon={<ArrowLeftOutlined />} 
               onClick={goUp} 
-              disabled={currentPath === '/'}
+              disabled={currentPath === '/'} 
               style={{ marginRight: 8 }}
             />
           </Breadcrumb.Item>
@@ -430,13 +522,11 @@ const FileManager = () => {
             </Breadcrumb.Item>
           ))}
         </Breadcrumb>
-      </Card>
 
-      {/* 文件操作工具栏 */}
-      <Card style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center', marginBottom: 16 }}>
+        {/* 文件操作工具栏 */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
           {/* 搜索框 */}
-          <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{ flex: 1, minWidth: 150, marginBottom: isMobile ? 8 : 0 }}>
             <Search
               placeholder="搜索文件..."
               allowClear
@@ -447,15 +537,16 @@ const FileManager = () => {
             />
           </div>
           
-          {/* 操作按钮 */}
-          <Space>
+          {/* 主要操作按钮组 */}
+          <Space size={8} wrap>
             {/* 新建目录按钮 */}
             <Button
               type="primary"
               icon={<PlusOutlined />}
               onClick={() => setIsCreateDirModalOpen(true)}
+              size={isMobile ? "small" : "middle"}
             >
-              新建目录
+              {isMobile ? "" : "新建目录"}
             </Button>
 
             {/* 上传文件按钮 */}
@@ -463,8 +554,9 @@ const FileManager = () => {
               <Button
                 icon={<UploadOutlined />}
                 disabled={isUploading}
+                size={isMobile ? "small" : "middle"}
               >
-                上传文件
+                {isMobile ? "" : "上传文件"}
               </Button>
               <input
                 type="file"
@@ -479,30 +571,42 @@ const FileManager = () => {
             {/* 选中文件数量 */}
             {selectedFiles.length > 0 && (
               <Badge count={selectedFiles.length} style={{ backgroundColor: '#1890ff' }}>
-                <Button type="default">
-                  已选择
+                <Button type="default" size={isMobile ? "small" : "middle"}>
+                  {isMobile ? "" : "已选择"}
                 </Button>
               </Badge>
             )}
-          </Space>
 
-          {/* 批量操作按钮 */}
-          <Space>
             {/* 重命名按钮 */}
             <Button
               icon={<EditOutlined />}
               onClick={handleRename}
               disabled={selectedFiles.length !== 1}
+              size={isMobile ? "small" : "middle"}
+              title="重命名"
             >
-              重命名
+              {isMobile ? "" : "重命名"}
             </Button>
 
             {/* 复制按钮 */}
             <Button
               icon={<CopyOutlined />}
               disabled={selectedFiles.length === 0}
+              size={isMobile ? "small" : "middle"}
+              title="复制"
             >
-              复制
+              {isMobile ? "" : "复制"}
+            </Button>
+
+            {/* 批量下载按钮 */}
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={handleBatchDownload}
+              disabled={selectedFiles.length === 0}
+              size={isMobile ? "small" : "middle"}
+              title="批量下载"
+            >
+              {isMobile ? "" : "批量下载"}
             </Button>
 
             {/* 删除按钮 */}
@@ -511,35 +615,36 @@ const FileManager = () => {
               onClick={handleDelete}
               disabled={selectedFiles.length === 0}
               danger
+              size={isMobile ? "small" : "middle"}
+              title="删除"
             >
-              删除
+              {isMobile ? "" : "删除"}
             </Button>
           </Space>
         </div>
 
         {/* 上传进度条 */}
         {isUploading && (
-          <Card size="small" style={{ marginTop: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+          <div style={{ marginTop: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
               <span>上传进度</span>
               <span>{uploadProgress}%</span>
             </div>
             <Progress percent={uploadProgress} status="active" />
-          </Card>
+          </div>
         )}
       </Card>
 
       {/* 文件列表 */}
-      <Card>
+      <Card style={{ flex: 1, display: 'flex', flexDirection: 'column', margin: 0 }}>
         <Spin spinning={isLoading}>
           <Table
             columns={columns}
             dataSource={filteredFiles}
             rowKey="path"
             pagination={false}
-            onRow={(record) => ({
-              onClick: () => handleFileClick(record)
-            })}
+            scroll={{ x: 'max-content', y: `calc(100vh - 400px)` }}
+            size="middle"
             locale={{
               emptyText: (
                 <div style={{ textAlign: 'center', padding: 40 }}>
@@ -552,6 +657,17 @@ const FileManager = () => {
           />
         </Spin>
       </Card>
+
+      {/* 下载进度条 */}
+      {isDownloading && (
+        <Card style={{ margin: 16, marginBottom: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span>下载进度</span>
+            <span>{downloadProgress}%</span>
+          </div>
+          <Progress percent={downloadProgress} status="active" />
+        </Card>
+      )}
 
       {/* 新建目录模态框 */}
       <Modal

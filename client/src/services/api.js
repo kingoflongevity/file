@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // 创建axios实例
 const api = axios.create({
-  baseURL: 'http://localhost:8080/api',
+  baseURL: 'http://localhost:8082/api',
   timeout: 30000, // 30秒超时
   headers: {
     'Content-Type': 'application/json',
@@ -63,26 +63,44 @@ export const authApi = {
   getMe: () => api.get('/auth/me'),
 };
 
-// SSH连接相关API
-export const sshApi = {
-  // 获取所有SSH连接
-  getConnections: () => api.get('/ssh/connections'),
-  
-  // 获取单个SSH连接
-  getConnection: (id) => api.get(`/ssh/connections/${id}`),
-  
-  // 添加SSH连接
-  addConnection: (connectionData) => api.post('/ssh/connections', connectionData),
-  
-  // 更新SSH连接
-  updateConnection: (id, connectionData) => api.put(`/ssh/connections/${id}`, connectionData),
-  
-  // 删除SSH连接
-  deleteConnection: (id) => api.delete(`/ssh/connections/${id}`),
-  
-  // 测试SSH连接
-  testConnection: (id) => api.post(`/ssh/connections/${id}/test`),
+// 连接相关API
+export const connectionApi = {
+	// 获取所有连接
+	getConnections: () => api.get('/connections'),
+	
+	// 获取单个连接
+	getConnection: (id) => api.get(`/connections/${id}`),
+	
+	// 添加连接
+	addConnection: (connectionData) => api.post('/connections', connectionData),
+	
+	// 更新连接
+	updateConnection: (id, connectionData) => api.put(`/connections/${id}`, connectionData),
+	
+	// 删除连接
+	deleteConnection: (id) => api.delete(`/connections/${id}`),
+	
+	// 测试已保存的连接
+	testConnection: (id) => api.post(`/connections/${id}/test`),
+	
+	// 测试未保存的连接
+	testConnectionDirect: (connectionData) => api.post('/connections/test', connectionData),
+	
+	// 获取所有分类
+	getCategories: () => api.get('/categories'),
+	
+	// 添加分类
+	addCategory: (name) => api.post('/categories', { name }),
+	
+	// 更新分类
+	updateCategory: (oldName, newName) => api.put(`/categories/${oldName}`, { new_name: newName }),
+	
+	// 删除分类
+	deleteCategory: (name) => api.delete(`/categories/${name}`),
 };
+
+// 保留旧的sshApi名称，保持向后兼容
+export const sshApi = connectionApi;
 
 // 文件操作相关API
 export const fileApi = {
@@ -113,10 +131,44 @@ export const fileApi = {
   },
   
   // 下载文件
-  downloadFile: (connId, path) => {
-    // 使用window.open直接下载，避免axios处理二进制数据的问题
+  downloadFile: async (connId, path) => {
     const token = localStorage.getItem('token');
-    window.open(`http://localhost:8080/api/files/download/${connId}${path}?token=${token}`, '_blank');
+    try {
+      // 发送请求，获取JSON响应
+      const response = await fetch(`http://localhost:8082/api/files/download/${connId}${path}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      // 解析JSON响应
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('下载失败:', error);
+      throw error;
+    }
+  },
+  
+  // 批量下载文件
+  downloadFiles: async (connId, paths, onProgress) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await api.post('/files/download/batch', 
+        { connId, paths }, 
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          }
+        }
+      );
+      
+      return response;
+    } catch (error) {
+      console.error('批量下载失败:', error);
+      throw error;
+    }
   },
   
   // 删除文件
@@ -136,6 +188,21 @@ export const fileApi = {
   
   // 保存文件内容
   saveFileContent: (connId, path, content) => api.put('/files/content', { connId, path, content }),
+};
+
+// 任务管理相关API
+export const taskApi = {
+  // 获取所有任务
+  getTasks: () => api.get('/tasks'),
+  
+  // 获取单个任务状态
+  getTaskStatus: (taskId) => api.get(`/tasks/${taskId}`),
+  
+  // 取消任务
+  cancelTask: (taskId) => api.post(`/tasks/${taskId}/cancel`),
+  
+  // 删除任务
+  deleteTask: (taskId) => api.delete(`/tasks/${taskId}`),
 };
 
 export default api;

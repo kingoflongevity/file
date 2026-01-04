@@ -1,0 +1,31 @@
+{
+  "name": "远程连接文件管理",
+  "version": "1.0.0",
+  "description": "远程连接文件管理系统，支持SSH、SFTP和FTP协议",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "concurrently \"npm run dev:client\" \"wait-on http://localhost:5173 && npm start\"",
+    "dev:client": "cd client && npm run dev",
+    "build:client": "cd client && npm run build",
+    "build:server": "cd server && go build -o ../dist/server ./cmd/api",
+    "build": "npm run build:client && npm run build:server",
+    "package": "electron-builder",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "keywords": [
+    "electron",
+    "ssh",
+    "sftp",
+    "ftp",
+    "远程文件管理"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^9.0.1",
+    "electron": "^33.0.2",
+    "electron-builder": "^25.1.8",
+    "wait-on": "^8.0.1"
+  }
+}

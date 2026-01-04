@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
 import { authApi } from '../services/api';
-import MainLayout from './MainLayout';
 
 const PrivateRoute = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -50,7 +49,7 @@ const PrivateRoute = () => {
     );
   }
 
-  return isAuthenticated ? <MainLayout /> : <Navigate to="/login" replace />;
+  return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />;
 };
 
 export default PrivateRoute;

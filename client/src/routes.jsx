@@ -3,10 +3,12 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
-import SSHConnections from './pages/SSHConnections';
+import Connections from './pages/SSHConnections';
 import FileManager from './pages/FileManager';
+import Notifications from './pages/Notifications';
 import NotFound from './pages/NotFound';
 import PrivateRoute from './components/PrivateRoute';
+import MainLayout from './components/MainLayout';
 
 // 创建路由
 const router = createBrowserRouter([
@@ -27,15 +29,25 @@ const router = createBrowserRouter([
     children: [
       {
         path: '',
-        element: <Dashboard />,
-      },
-      {
-        path: 'connections',
-        element: <SSHConnections />,
-      },
-      {
-        path: 'files/:connId/*',
-        element: <FileManager />,
+        element: <MainLayout />,
+        children: [
+          {
+            path: '',
+            element: <Dashboard />,
+          },
+          {
+            path: 'connections',
+            element: <Connections />,
+          },
+          {
+            path: 'files/:connId/*',
+            element: <FileManager />,
+          },
+          {
+            path: 'notifications',
+            element: <Notifications />,
+          },
+        ],
       },
     ],
   },

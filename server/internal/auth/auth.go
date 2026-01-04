@@ -13,10 +13,11 @@ import (
 	"strings"
 	"time"
 
+	"remote-file-manager/internal/config"
+	"remote-file-manager/internal/log"
+
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
-	"file-manager/internal/config"
-	"file-manager/internal/log"
 )
 
 // User 用户信息
@@ -41,18 +42,18 @@ type Claims struct {
 
 // AuthManager 认证管理器
 type AuthManager struct {
-	cfg        *config.Config
-	users      map[string]*User
-	usersDir   string
+	cfg           *config.Config
+	users         map[string]*User
+	usersDir      string
 	encryptionKey []byte
 }
 
 // NewAuthManager 创建认证管理器
 func NewAuthManager(cfg *config.Config) *AuthManager {
 	manager := &AuthManager{
-		cfg:        cfg,
-		users:      make(map[string]*User),
-		usersDir:   "./users",
+		cfg:           cfg,
+		users:         make(map[string]*User),
+		usersDir:      "./users",
 		encryptionKey: []byte(cfg.PasswordSalt[:32]), // 使用密码盐作为加密密钥
 	}
 
@@ -184,10 +185,10 @@ func (m *AuthManager) GetMe(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"id":       user.ID,
-		"username": user.Username,
-		"email":    user.Email,
-		"role":     user.Role,
+		"id":         user.ID,
+		"username":   user.Username,
+		"email":      user.Email,
+		"role":       user.Role,
 		"created_at": user.CreatedAt,
 		"updated_at": user.UpdatedAt,
 	})
@@ -196,23 +197,29 @@ func (m *AuthManager) GetMe(c *gin.Context) {
 // AuthMiddleware 认证中间件
 func (m *AuthManager) AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 从Authorization头获取令牌
+		var tokenString string
+
+		// 1. 优先从Authorization头获取令牌
 		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
+		if authHeader != "" {
+			// 提取令牌
+			tokenParts := strings.Split(authHeader, " ")
+			if len(tokenParts) == 2 && tokenParts[0] == "Bearer" {
+				tokenString = tokenParts[1]
+			}
+		}
+
+		// 2. 如果Authorization头没有提供令牌，从URL查询参数获取
+		if tokenString == "" {
+			tokenString = c.Query("token")
+		}
+
+		// 3. 如果还是没有令牌，返回错误
+		if tokenString == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
 			c.Abort()
 			return
 		}
-
-		// 提取令牌
-		tokenParts := strings.Split(authHeader, " ")
-		if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization header format"})
-			c.Abort()
-			return
-		}
-
-		tokenString := tokenParts[1]
 
 		// 解析和验证令牌
 		claims, err := m.parseToken(tokenString)
