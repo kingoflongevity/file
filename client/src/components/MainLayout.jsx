@@ -1,8 +1,32 @@
 import React from 'react';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
+import {
+  Layout,
+  Menu,
+  Avatar,
+  Button,
+  Dropdown,
+  Space,
+  Tooltip,
+  theme,
+} from 'antd';
+import {
+  DashboardOutlined,
+  DatabaseOutlined,
+  LogoutOutlined,
+  BellOutlined,
+  SettingOutlined,
+  UserOutlined,
+} from '@ant-design/icons';
+
+const { Header, Content, Sider } = Layout;
 
 const MainLayout = () => {
   const navigate = useNavigate();
+  const { token } = theme.useToken();
+
+  // 获取当前用户信息
+  const user = JSON.parse(localStorage.getItem('user'));
 
   // 处理登出
   const handleLogout = () => {
@@ -11,89 +35,142 @@ const MainLayout = () => {
     navigate('/login');
   };
 
-  // 获取当前用户信息
-  const user = JSON.parse(localStorage.getItem('user'));
+  // 用户菜单
+  const userMenu = [
+    {
+      key: '1',
+      label: (
+        <div className="flex items-center">
+          <UserOutlined className="mr-2" />
+          <span>个人中心</span>
+        </div>
+      ),
+    },
+    {
+      key: '2',
+      label: (
+        <div className="flex items-center">
+          <SettingOutlined className="mr-2" />
+          <span>设置</span>
+        </div>
+      ),
+    },
+    {
+      type: 'divider',
+    },
+    {
+      key: '3',
+      label: (
+        <div className="flex items-center text-red-600">
+          <LogoutOutlined className="mr-2" />
+          <span onClick={handleLogout}>退出登录</span>
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <Layout style={{ minHeight: '100vh' }}>
       {/* 侧边栏 */}
-      <aside className="w-64 bg-white shadow-md flex flex-col">
-        {/* 侧边栏头部 */}
-        <div className="p-4 border-b">
-          <h1 className="text-xl font-bold text-gray-800">文件管理系统</h1>
+      <Sider
+        theme="light"
+        width={240}
+        style={{
+          boxShadow: '2px 0 8px rgba(0, 21, 41, 0.1)',
+        }}
+      >
+        {/* 侧边栏标题 */}
+        <div 
+          style={{
+            padding: '16px 24px',
+            fontSize: '18px',
+            fontWeight: '600',
+            color: token.colorPrimary,
+            borderBottom: `1px solid ${token.colorBorderSecondary}`,
+          }}
+        >
+          <DatabaseOutlined className="mr-2" />
+          SSH 文件管理器
         </div>
 
         {/* 导航菜单 */}
-        <nav className="flex-1 p-4 overflow-y-auto">
-          <ul className="space-y-2">
-            <li>
-              <Link
-                to="/"
-                className="flex items-center px-3 py-2 text-gray-700 rounded-md hover:bg-gray-100 transition-colors"
-              >
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                </svg>
-                仪表盘
-              </Link>
-            </li>
-            <li>
-              <Link
-                to="/connections"
-                className="flex items-center px-3 py-2 text-gray-700 rounded-md hover:bg-gray-100 transition-colors"
-              >
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                SSH连接
-              </Link>
-            </li>
-          </ul>
-        </nav>
-
-        {/* 侧边栏底部 */}
-        <div className="p-4 border-t">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                <span className="text-blue-600 font-medium">{user?.username?.charAt(0).toUpperCase()}</span>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-700">{user?.username}</p>
-                <p className="text-xs text-gray-500">{user?.role}</p>
-              </div>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="p-2 text-gray-500 hover:text-red-600 rounded-md hover:bg-gray-100 transition-colors"
-              title="退出登录"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      </aside>
+        <Menu
+          mode="inline"
+          defaultSelectedKeys={['1']}
+          style={{ borderRight: 0, height: '100%' }}
+          items={[
+            {
+              key: '1',
+              icon: <DashboardOutlined />,
+              label: <Link to="/">仪表盘</Link>,
+            },
+            {
+              key: '2',
+              icon: <DatabaseOutlined />,
+              label: <Link to="/connections">SSH连接</Link>,
+            },
+          ]}
+        />
+      </Sider>
 
       {/* 主内容区 */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <Layout>
         {/* 顶部导航栏 */}
-        <header className="bg-white shadow-sm border-b">
-          <div className="px-6 py-3 flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Outlet />
-            </div>
+        <Header
+          style={{
+            background: token.colorBgContainer,
+            boxShadow: '0 2px 8px rgba(0, 21, 41, 0.08)',
+            padding: '0 24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div style={{ fontSize: '18px', fontWeight: '600' }}>
+            <Outlet />
           </div>
-        </header>
+
+          <Space>
+            {/* 通知按钮 */}
+            <Tooltip title="通知">
+              <Button
+                type="text"
+                icon={<BellOutlined />}
+                style={{ fontSize: '18px' }}
+              />
+            </Tooltip>
+
+            {/* 用户头像下拉菜单 */}
+            <Dropdown menu={{ items: userMenu }} placement="bottomRight">
+              <Space>
+                <Avatar
+                  size="default"
+                  style={{
+                    backgroundColor: token.colorPrimary,
+                    marginRight: 8,
+                  }}
+                >
+                  {user?.username?.charAt(0).toUpperCase()}
+                </Avatar>
+                <span style={{ fontWeight: '500' }}>{user?.username}</span>
+              </Space>
+            </Dropdown>
+          </Space>
+        </Header>
 
         {/* 页面内容 */}
-        <div className="flex-1 p-6 overflow-y-auto">
+        <Content
+          style={{
+            padding: 24,
+            margin: 0,
+            minHeight: 280,
+            background: token.colorBgContainer,
+          }}
+        >
           <Outlet />
-        </div>
-      </main>
-    </div>
+        </Content>
+      </Layout>
+    </Layout>
   );
 };
 

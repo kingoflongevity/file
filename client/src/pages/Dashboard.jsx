@@ -1,5 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Card, Statistic, Row, Col, Button, List, Avatar, Badge, Skeleton, Divider } from 'antd';
+import { 
+  DatabaseOutlined, 
+  CheckCircleOutlined, 
+  FileOutlined, 
+  PlusOutlined, 
+  FolderOpenOutlined, 
+  UploadOutlined, 
+  EditOutlined 
+} from '@ant-design/icons';
 import { sshApi } from '../services/api';
 
 const Dashboard = () => {
@@ -40,196 +50,170 @@ const Dashboard = () => {
     loadStats();
   }, []);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-xl text-gray-600">加载中...</div>
-      </div>
-    );
-  }
+  const quickStartItems = [
+    {
+      icon: <PlusOutlined />,
+      title: '添加SSH连接',
+      description: '创建新的SSH连接配置，连接到远程服务器',
+      color: '#1890ff'
+    },
+    {
+      icon: <FolderOpenOutlined />,
+      title: '浏览文件系统',
+      description: '通过SSH连接浏览和管理远程服务器上的文件',
+      color: '#52c41a'
+    },
+    {
+      icon: <UploadOutlined />,
+      title: '上传和下载文件',
+      description: '轻松上传本地文件到服务器或从服务器下载文件',
+      color: '#722ed1'
+    },
+    {
+      icon: <EditOutlined />,
+      title: '管理文件',
+      description: '创建、删除、重命名、移动和复制文件和文件夹',
+      color: '#fa8c16'
+    }
+  ];
 
   return (
-    <div className="space-y-6">
+    <div style={{ padding: 24 }}>
       {/* 页面标题 */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-800">仪表盘</h1>
-        <p className="mt-1 text-gray-600">欢迎使用文件管理系统</p>
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ fontSize: 28, fontWeight: 'bold', marginBottom: 8 }}>仪表盘</h1>
+        <p style={{ color: '#666' }}>欢迎使用文件管理系统</p>
       </div>
 
       {/* 统计卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         {/* 总连接数 */}
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500">总SSH连接</p>
-              <h3 className="mt-1 text-3xl font-bold text-gray-800">{stats.totalConnections}</h3>
-            </div>
-            <div className="p-3 bg-blue-100 rounded-full">
-              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </div>
-          </div>
-          <Link
-            to="/connections"
-            className="mt-4 inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-500"
-          >
-            查看所有连接
-            <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </Link>
-        </div>
+        <Col xs={24} sm={12} md={8}>
+          <Card hoverable>
+            <Statistic
+              title="总SSH连接"
+              value={stats.totalConnections}
+              prefix={<DatabaseOutlined style={{ color: '#1890ff' }} />}
+              valueStyle={{ color: '#1890ff', fontSize: 32 }}
+              footer={
+                <Link to="/connections">
+                  <Button type="link" size="small">查看所有连接</Button>
+                </Link>
+              }
+            />
+          </Card>
+        </Col>
 
         {/* 活跃连接数 */}
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500">活跃连接</p>
-              <h3 className="mt-1 text-3xl font-bold text-gray-800">{stats.activeConnections}</h3>
-            </div>
-            <div className="p-3 bg-green-100 rounded-full">
-              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
-            </div>
-          </div>
-          <Link
-            to="/connections"
-            className="mt-4 inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-500"
-          >
-            管理连接
-            <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </Link>
-        </div>
+        <Col xs={24} sm={12} md={8}>
+          <Card hoverable>
+            <Statistic
+              title="活跃连接"
+              value={stats.activeConnections}
+              prefix={<CheckCircleOutlined style={{ color: '#52c41a' }} />}
+              valueStyle={{ color: '#52c41a', fontSize: 32 }}
+              footer={
+                <Link to="/connections">
+                  <Button type="link" size="small">管理连接</Button>
+                </Link>
+              }
+            />
+          </Card>
+        </Col>
 
         {/* 功能卡片 */}
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500">快速访问</p>
-              <h3 className="mt-1 text-xl font-bold text-gray-800">文件管理</h3>
-            </div>
-            <div className="p-3 bg-purple-100 rounded-full">
-              <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
-              </svg>
-            </div>
-          </div>
-          <p className="mt-2 text-sm text-gray-600">通过SSH连接管理远程文件</p>
-          <Link
-            to="/connections"
-            className="mt-4 inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-500"
+        <Col xs={24} sm={12} md={8}>
+          <Card hoverable>
+            <Statistic
+              title="快速访问"
+              value="文件管理"
+              prefix={<FileOutlined style={{ color: '#722ed1' }} />}
+              valueStyle={{ fontSize: 20, fontWeight: 'bold' }}
+              footer={
+                <Link to="/connections">
+                  <Button type="link" size="small">开始使用</Button>
+                </Link>
+              }
+            />
+          </Card>
+        </Col>
+      </Row>
+
+      <Row gutter={[16, 16]}>
+        {/* 最近连接 */}
+        <Col xs={24} lg={12}>
+          <Card 
+            title="最近使用的连接"
+            extra={
+              <Link to="/connections">
+                <Button type="link" size="small">查看全部</Button>
+              </Link>
+            }
           >
-            开始使用
-            <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-            </svg>
-          </Link>
-        </div>
-      </div>
-
-      {/* 最近连接 */}
-      {stats.recentConnections.length > 0 && (
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-800">最近使用的连接</h2>
-            <Link
-              to="/connections"
-              className="text-sm font-medium text-blue-600 hover:text-blue-500"
-            >
-              查看全部
-            </Link>
-          </div>
-          
-          <div className="space-y-3">
-            {stats.recentConnections.map((conn) => (
-              <div
-                key={conn.id}
-                className="flex items-center justify-between p-3 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors"
-              >
-                <div className="flex items-center">
-                  <div className={`w-3 h-3 rounded-full mr-3 ${
-                    conn.is_active ? 'bg-green-500' : 'bg-gray-300'
-                  }`}></div>
-                  <div>
-                    <p className="font-medium text-gray-800">{conn.name}</p>
-                    <p className="text-xs text-gray-500">
-                      {conn.username}@{conn.host}:{conn.port}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs text-gray-500">
-                    {new Date(conn.last_used).toLocaleString()}
-                  </span>
-                  <Link
-                    to={`/files/${conn.id}/`}
-                    className="px-3 py-1 text-xs font-medium text-blue-600 bg-blue-100 rounded-md hover:bg-blue-200 transition-colors"
+            {isLoading ? (
+              <Skeleton active paragraph={{ rows: 3 }} />
+            ) : stats.recentConnections.length > 0 ? (
+              <List
+                dataSource={stats.recentConnections}
+                renderItem={(item) => (
+                  <List.Item
+                    actions={[
+                      <span key="time" style={{ fontSize: 12, color: '#999' }}>
+                        {new Date(item.last_used).toLocaleString()}
+                      </span>,
+                      <Link key="open" to={`/files/${item.id}/`}>
+                        <Button size="small" type="primary">打开</Button>
+                      </Link>
+                    ]}
                   >
-                    打开
-                  </Link>
-                </div>
+                    <List.Item.Meta
+                      avatar={
+                        <Badge status={item.is_active ? 'success' : 'default'}>
+                          <Avatar icon={<DatabaseOutlined />} />
+                        </Badge>
+                      }
+                      title={<a href={`/files/${item.id}/`}>{item.name}</a>}
+                      description={`${item.username}@${item.host}:${item.port}`}
+                    />
+                  </List.Item>
+                )}
+              />
+            ) : (
+              <div style={{ textAlign: 'center', padding: 24, color: '#999' }}>
+                暂无连接记录
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+            )}
+          </Card>
+        </Col>
 
-      {/* 快速指南 */}
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">快速开始</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="flex items-start">
-            <div className="p-2 bg-blue-100 rounded-full mr-3">
-              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-            </div>
-            <div>
-              <h3 className="font-medium text-gray-800">添加SSH连接</h3>
-              <p className="mt-1 text-sm text-gray-600">创建新的SSH连接配置，连接到远程服务器</p>
-            </div>
-          </div>
-          <div className="flex items-start">
-            <div className="p-2 bg-green-100 rounded-full mr-3">
-              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-              </svg>
-            </div>
-            <div>
-              <h3 className="font-medium text-gray-800">浏览文件系统</h3>
-              <p className="mt-1 text-sm text-gray-600">通过SSH连接浏览和管理远程服务器上的文件</p>
-            </div>
-          </div>
-          <div className="flex items-start">
-            <div className="p-2 bg-purple-100 rounded-full mr-3">
-              <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-            </div>
-            <div>
-              <h3 className="font-medium text-gray-800">上传和下载文件</h3>
-              <p className="mt-1 text-sm text-gray-600">轻松上传本地文件到服务器或从服务器下载文件</p>
-            </div>
-          </div>
-          <div className="flex items-start">
-            <div className="p-2 bg-orange-100 rounded-full mr-3">
-              <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-              </svg>
-            </div>
-            <div>
-              <h3 className="font-medium text-gray-800">管理文件</h3>
-              <p className="mt-1 text-sm text-gray-600">创建、删除、重命名、移动和复制文件和文件夹</p>
-            </div>
-          </div>
-        </div>
-      </div>
+        {/* 快速开始 */}
+        <Col xs={24} lg={12}>
+          <Card title="快速开始">
+            <List
+              grid={{ gutter: 16, column: 1 }}
+              dataSource={quickStartItems}
+              renderItem={(item) => (
+                <List.Item>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <Avatar 
+                      icon={item.icon} 
+                      style={{ 
+                        backgroundColor: item.color, 
+                        marginRight: 16, 
+                        fontSize: 20 
+                      }} 
+                    />
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: 16, fontWeight: 'bold' }}>{item.title}</h3>
+                      <p style={{ margin: 4, fontSize: 14, color: '#666' }}>{item.description}</p>
+                    </div>
+                  </div>
+                </List.Item>
+              )}
+            />
+          </Card>
+        </Col>
+      </Row>
     </div>
   );
 };

@@ -1,39 +1,23 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Form, Input, Button, Card, Alert, Space } from 'antd';
+import { LockOutlined, UserOutlined } from '@ant-design/icons';
 import { authApi } from '../services/api';
 
 const Login = () => {
-  const [formData, setFormData] = useState({
-    username: '',
-    password: '',
-  });
-  const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [form] = Form.useForm();
+  const [error, setError] = React.useState('');
+  const [isLoading, setIsLoading] = React.useState(false);
   const navigate = useNavigate();
 
-  // 处理表单输入变化
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    setError('');
-  };
-
   // 处理表单提交
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    // 简单表单验证
-    if (!formData.username || !formData.password) {
-      setError('请填写所有必填字段');
-      return;
-    }
-
+  const handleSubmit = async (values) => {
     setIsLoading(true);
     setError('');
 
     try {
       // 调用登录API
-      const response = await authApi.login(formData);
+      const response = await authApi.login(values);
       
       // 保存token和用户信息
       localStorage.setItem('token', response.token);
@@ -49,73 +33,70 @@ const Login = () => {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100">
-      <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-        <div className="text-center">
-          <h2 className="text-3xl font-bold text-gray-800">文件管理系统</h2>
-          <p className="mt-2 text-gray-600">登录以访问您的账户</p>
-        </div>
-        
+    <div style={{ 
+      display: 'flex', 
+      minHeight: '100vh', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      background: '#f0f2f5' 
+    }}>
+      <Card 
+        style={{ width: 400 }} 
+        title={<div style={{ textAlign: 'center', fontSize: '24px', fontWeight: 'bold' }}>文件管理系统</div>}
+        extra={<Link to="/register">立即注册</Link>}
+      >
         {error && (
-          <div className="p-3 text-red-700 bg-red-100 rounded-lg">
-            {error}
-          </div>
+          <Alert 
+            message="登录失败" 
+            description={error} 
+            type="error" 
+            showIcon 
+            style={{ marginBottom: 16 }} 
+          />
         )}
         
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-              用户名
-            </label>
-            <input
-              type="text"
-              id="username"
-              name="username"
-              value={formData.username}
-              onChange={handleChange}
-              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              placeholder="输入用户名"
+        <Form
+          form={form}
+          name="login"
+          onFinish={handleSubmit}
+          autoComplete="on"
+        >
+          <Form.Item
+            name="username"
+            rules={[{ required: true, message: '请输入用户名!' }]}
+          >
+            <Input
+              prefix={<UserOutlined className="site-form-item-icon" />}
+              placeholder="用户名"
               autoComplete="username"
             />
-          </div>
+          </Form.Item>
           
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-              密码
-            </label>
-            <input
+          <Form.Item
+            name="password"
+            rules={[{ required: true, message: '请输入密码!' }]}
+          >
+            <Input
+              prefix={<LockOutlined className="site-form-item-icon" />}
               type="password"
-              id="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              placeholder="输入密码"
+              placeholder="密码"
               autoComplete="current-password"
             />
-          </div>
+          </Form.Item>
           
-          <div>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className={`w-full py-2 px-4 font-medium rounded-md shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors ${
-                isLoading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
-              }`}
+          <Form.Item>
+            <Button 
+              type="primary" 
+              htmlType="submit" 
+              loading={isLoading}
+              block
+              size="large"
             >
-              {isLoading ? '登录中...' : '登录'}
-            </button>
-          </div>
-        </form>
-        
-        <div className="text-center">
-          <p className="text-sm text-gray-600">
-            还没有账户？ <Link to="/register" className="font-medium text-blue-600 hover:text-blue-500">
-              立即注册
-            </Link>
-          </p>
-        </div>
-      </div>
+              登录
+            </Button>
+          </Form.Item>
+        </Form>
+      </Card>
     </div>
   );
 };

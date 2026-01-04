@@ -1,0 +1,60 @@
+# 依赖目录
+node_modules/
+/vendor/
+
+# 日志文件
+logs/
+*.log
+*.log.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# 配置文件
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 编译输出
+/dist/
+/build/
+/out/
+
+# 编辑器目录和文件
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# 测试覆盖率
+coverage/
+*.lcov
+
+# 临时文件
+*.tmp
+*.temp
+*.swp
+
+# 用户数据
+users/
+
+# Go编译产物
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
