@@ -17,9 +17,9 @@ type Config struct {
 	LogLevel string
 
 	// 认证配置
-	JWTSecret     string
-	JWTExpiresIn  int
-	PasswordSalt  string
+	JWTSecret    string
+	JWTExpiresIn int
+	PasswordSalt string
 
 	// 数据库配置
 	DBPath string
@@ -56,12 +56,12 @@ func LoadConfig() (*Config, error) {
 
 	// 构建配置
 	cfg := &Config{
-		Port:             port,
-		LogLevel:         getEnv("LOG_LEVEL", "info"),
-		JWTSecret:        getEnv("JWT_SECRET", "your-secret-key-change-me"),
-		JWTExpiresIn:     jwtExpires,
-		PasswordSalt:     getEnv("PASSWORD_SALT", "your-password-salt-change-me"),
-		DBPath:           getEnv("DB_PATH", "./data.db"),
+		Port:              port,
+		LogLevel:          getEnv("LOG_LEVEL", "info"),
+		JWTSecret:         getEnv("JWT_SECRET", "your-secret-key-change-me"),
+		JWTExpiresIn:      jwtExpires,
+		PasswordSalt:      getEnv("PASSWORD_SALT", "your-very-secure-password-salt-change-me-now"),
+		DBPath:            getEnv("DB_PATH", "./data.db"),
 		MaxSSHConnections: maxSSHConn,
 	}
 
