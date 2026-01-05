@@ -19,8 +19,7 @@ Remote Connection File Management System is a powerful cross-platform file manag
    - `settings.png` - 设置界面 / Settings interface
 
 ### 添加截图到README / Add Screenshots to README
-在下方添加截图markdown语法，例如 / Add screenshot markdown syntax below, for example:
-```markdown
+
 ### 登录界面 / Login Interface
 ![登录界面](screenshots/login.png)
 
@@ -28,17 +27,16 @@ Remote Connection File Management System is a powerful cross-platform file manag
 ![仪表板](screenshots/dashboard.png)
 
 ### 连接管理 / Connection Management
-![连接管理](screenshots/connection-management.png)
+<!-- ![连接管理](screenshots/connection-management.png) -->
 
 ### 文件管理 / File Management
-![文件管理](screenshots/file-manager.png)
+<!-- ![文件管理](screenshots/file-manager.png) -->
 
 ### 任务管理 / Task Management
-![任务管理](screenshots/task-management.png)
+<!-- ![任务管理](screenshots/task-management.png) -->
 
 ### 设置界面 / Settings Interface
-![设置界面](screenshots/settings.png)
-```
+<!-- ![设置界面](screenshots/settings.png) -->
 
 ## 🔌 支持的服务器类型 / Supported Server Types
 
