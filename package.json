@@ -1,15 +1,19 @@
 {
-  "name": "远程连接文件管理",
+  "name": "remote-file-manager",
   "version": "1.0.0",
   "description": "远程连接文件管理系统，支持SSH、SFTP和FTP协议",
   "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "concurrently \"npm run dev:client\" \"wait-on http://localhost:5173 && npm start\"",
+    "dev": "concurrently \"npm run dev:client\" \"wait-on http://localhost:5173; npm start\"",
     "dev:client": "cd client && npm run dev",
     "build:client": "cd client && npm run build",
-    "build:server": "cd server && go build -o ../dist/server ./cmd/api",
+    "build:server:windows": "cd server && go build -o ../dist/server-windows.exe ./cmd/api",
+    "build:server:linux": "cd server && set GOOS=linux && set GOARCH=amd64 && go build -o ../dist/server-linux ./cmd/api",
+    "build:server": "npm run build:server:windows",
     "build": "npm run build:client && npm run build:server",
+    "package:windows": "electron-builder --win",
+    "package:linux": "electron-builder --linux",
     "package": "electron-builder",
     "postinstall": "electron-builder install-app-deps"
   },

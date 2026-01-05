@@ -1,9 +1,12 @@
 package main
 
 import (
+	"embed"
 	"fmt"
 	"net/http"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +22,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+//go:embed client
+var clientDist embed.FS
 
 func main() {
 	// 加载配置
@@ -65,6 +71,9 @@ func main() {
 	// 注册路由
 	registerRoutes(r, authManager, fileManager, connManager, taskManager)
 
+	// 提供静态文件服务
+	r.StaticFS("/", http.FS(clientDist))
+
 	// 启动服务
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
@@ -75,6 +84,29 @@ func main() {
 	}
 
 	log.Info("Server starting on port %d", cfg.Port)
+
+	// 自动打开浏览器
+	go func() {
+		time.Sleep(2 * time.Second)
+		url := fmt.Sprintf("http://localhost:%d", cfg.Port)
+		var err error
+
+		switch runtime.GOOS {
+		case "windows":
+			err = exec.Command("cmd", "/c", "start", url).Start()
+		case "darwin":
+			err = exec.Command("open", url).Start()
+		case "linux":
+			err = exec.Command("xdg-open", url).Start()
+		default:
+			log.Warn("Unsupported platform, cannot open browser automatically")
+		}
+
+		if err != nil {
+			log.Warn("Failed to open browser: %v", err)
+		}
+	}()
+
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("Failed to start server: %v", err)
 	}
