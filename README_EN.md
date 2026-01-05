@@ -10,17 +10,7 @@ Remote Connection File Management System is a powerful cross-platform file manag
 
 ## 🖼️ Feature Showcase
 
-### How to Add Project Screenshots
-1. Create a `screenshots` folder in the project root directory
-2. Place project screenshots in this folder according to the following naming rules:
-   - `login.png` - Login interface
-   - `dashboard.png` - Dashboard
-   - `connection-management.png` - Connection management
-   - `file-manager.png` - File management
-   - `task-management.png` - Task management
-   - `settings.png` - Settings interface
 
-### Add Screenshots to README
 
 ### Login Interface
 ![Login Interface](screenshots/login.png)

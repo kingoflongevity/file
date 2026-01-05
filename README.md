@@ -10,17 +10,6 @@
 
 ## 🖼️ 功能展示
 
-### 如何添加项目截图
-1. 在项目根目录创建 `screenshots` 文件夹
-2. 将项目截图按照以下命名规则放入该文件夹：
-   - `login.png` - 登录界面
-   - `dashboard.png` - 仪表板
-   - `connection-management.png` - 连接管理
-   - `file-manager.png` - 文件管理
-   - `task-management.png` - 任务管理
-   - `settings.png` - 设置界面
-
-### 添加截图到README
 
 ### 登录界面
 ![登录界面](screenshots/login.png)
