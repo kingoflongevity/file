@@ -4,9 +4,8 @@ import (
 	"embed"
 	"fmt"
 	"net/http"
-	"os/exec"
+	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -23,8 +22,25 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-//go:embed client
+// 开发环境下使用文件系统，生产环境下嵌入静态文件
+// 注意：实际部署时需要确保client目录存在或使用嵌入的静态文件
+//
+//go:embed client/dist
 var clientDist embed.FS
+
+// 在开发环境中，我们从文件系统读取静态文件，而不是使用嵌入的文件
+const isDevMode = true
+
+// 读取静态文件的辅助函数，根据isDevMode决定从嵌入文件系统还是实际文件系统读取
+func readStaticFile(filePath string) ([]byte, error) {
+	if isDevMode {
+		// 开发模式：从实际文件系统读取
+		return os.ReadFile(fmt.Sprintf("client/dist/%s", filePath))
+	} else {
+		// 生产模式：从嵌入文件系统读取
+		return clientDist.ReadFile(filePath)
+	}
+}
 
 func main() {
 	// 加载配置
@@ -68,11 +84,94 @@ func main() {
 	// 初始化任务管理器
 	taskManager := task.NewTaskManager()
 
-	// 注册路由
-	registerRoutes(r, authManager, fileManager, connManager, taskManager)
+	// 注册路由 - 先注册所有API路由
+	registerRoutes(r, authManager, fileManager, connManager, taskManager, cfg)
 
-	// 提供静态文件服务
-	r.StaticFS("/", http.FS(clientDist))
+	// 静态文件服务 - 使用最简单的方法，避免重定向问题
+
+	// 根路径 - 返回index.html
+	r.GET("/", func(c *gin.Context) {
+		content, err := readStaticFile("index.html")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read index.html"})
+			return
+		}
+		c.Data(http.StatusOK, "text/html; charset=utf-8", content)
+	})
+
+	// 处理assets目录下的静态资源
+	r.GET("/assets/*filepath", func(c *gin.Context) {
+		filepath := c.Param("filepath")
+		// 移除filepath前面的斜杠
+		filepath = strings.TrimPrefix(filepath, "/")
+		content, err := readStaticFile(fmt.Sprintf("assets/%s", filepath))
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
+			return
+		}
+
+		// 设置正确的Content-Type
+		contentType := "application/octet-stream"
+		if strings.HasSuffix(filepath, ".css") {
+			contentType = "text/css; charset=utf-8"
+		} else if strings.HasSuffix(filepath, ".js") {
+			contentType = "application/javascript; charset=utf-8"
+		} else if strings.HasSuffix(filepath, ".svg") {
+			contentType = "image/svg+xml"
+		}
+
+		c.Data(http.StatusOK, contentType, content)
+	})
+
+	// 处理vite.svg文件
+	r.GET("/vite.svg", func(c *gin.Context) {
+		content, err := readStaticFile("vite.svg")
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
+			return
+		}
+		c.Data(http.StatusOK, "image/svg+xml", content)
+	})
+
+	// 处理index.html直接请求
+	r.GET("/index.html", func(c *gin.Context) {
+		content, err := readStaticFile("index.html")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read index.html"})
+			return
+		}
+		c.Data(http.StatusOK, "text/html; charset=utf-8", content)
+	})
+
+	// 兜底路由 - 处理所有其他非API GET请求
+	// 用于单页应用路由，所有前端路由请求都返回index.html
+	r.NoRoute(func(c *gin.Context) {
+		// 检查是否是API请求
+		if strings.HasPrefix(c.Request.URL.Path, "/api/") {
+			c.JSON(http.StatusNotFound, gin.H{"error": "API endpoint not found"})
+			return
+		}
+
+		// 检查是否是健康检查请求
+		if c.Request.URL.Path == "/health" {
+			c.JSON(http.StatusOK, gin.H{"status": "ok"})
+			return
+		}
+
+		// 所有其他GET请求返回index.html - 使用c.Data避免重定向
+		if c.Request.Method == "GET" {
+			content, err := readStaticFile("index.html")
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to serve index.html"})
+				return
+			}
+			c.Data(http.StatusOK, "text/html; charset=utf-8", content)
+			return
+		}
+
+		// 其他HTTP方法返回404
+		c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+	})
 
 	// 启动服务
 	server := &http.Server{
@@ -85,34 +184,65 @@ func main() {
 
 	log.Info("Server starting on port %d", cfg.Port)
 
-	// 自动打开浏览器
-	go func() {
-		time.Sleep(2 * time.Second)
-		url := fmt.Sprintf("http://localhost:%d", cfg.Port)
-		var err error
-
-		switch runtime.GOOS {
-		case "windows":
-			err = exec.Command("cmd", "/c", "start", url).Start()
-		case "darwin":
-			err = exec.Command("open", url).Start()
-		case "linux":
-			err = exec.Command("xdg-open", url).Start()
-		default:
-			log.Warn("Unsupported platform, cannot open browser automatically")
-		}
-
-		if err != nil {
-			log.Warn("Failed to open browser: %v", err)
-		}
-	}()
+	// // 自动打开浏览器 - 已禁用，改为在用户登录后提示
+	// go func() {
+	// 	time.Sleep(2 * time.Second)
+	// 	url := fmt.Sprintf("http://localhost:%d", cfg.Port)
+	// 	var err error
+	//
+	// 	switch runtime.GOOS {
+	// 	case "windows":
+	// 		err = exec.Command("cmd", "/c", "start", url).Start()
+	// 	case "darwin":
+	// 		err = exec.Command("open", url).Start()
+	// 	case "linux":
+	// 		err = exec.Command("xdg-open", url).Start()
+	// 	default:
+	// 		log.Warn("Unsupported platform, cannot open browser automatically")
+	// 	}
+	//
+	// 	if err != nil {
+	// 		log.Warn("Failed to open browser: %v", err)
+	// 	}
+	// }()
 
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
 
-func registerRoutes(r *gin.Engine, authManager *auth.AuthManager, fileManager *file.FileManager, sshManager *connection.ConnectionManager, taskManager *task.TaskManager) {
+// 保存文件到默认下载目录
+func saveFileToDefaultDir(cfg *config.Config, fileName string, content []byte) error {
+	// 确保默认下载目录存在
+	if err := os.MkdirAll(cfg.DefaultDownloadDir, 0755); err != nil {
+		log.Error("Failed to create download directory: %s, error: %s", cfg.DefaultDownloadDir, err.Error())
+		return err
+	}
+
+	// 构建完整的文件路径
+	filePath := filepath.Join(cfg.DefaultDownloadDir, fileName)
+
+	// 检查文件是否已存在，如果存在则添加时间戳
+	if _, err := os.Stat(filePath); err == nil {
+		// 文件已存在，添加时间戳
+		ext := filepath.Ext(fileName)
+		baseName := strings.TrimSuffix(fileName, ext)
+		timestamp := time.Now().Format("20060102_150405")
+		fileName = fmt.Sprintf("%s_%s%s", baseName, timestamp, ext)
+		filePath = filepath.Join(cfg.DefaultDownloadDir, fileName)
+	}
+
+	// 写入文件
+	if err := os.WriteFile(filePath, content, 0644); err != nil {
+		log.Error("Failed to write file to download directory: %s, error: %s", filePath, err.Error())
+		return err
+	}
+
+	log.Info("File saved to download directory: %s, size: %d bytes", filePath, len(content))
+	return nil
+}
+
+func registerRoutes(r *gin.Engine, authManager *auth.AuthManager, fileManager *file.FileManager, sshManager *connection.ConnectionManager, taskManager *task.TaskManager, cfg *config.Config) {
 	// 健康检查路由
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
@@ -122,7 +252,6 @@ func registerRoutes(r *gin.Engine, authManager *auth.AuthManager, fileManager *f
 	authRoutes := r.Group("/api/auth")
 	{
 		authRoutes.POST("/login", authManager.Login)
-		authRoutes.POST("/register", authManager.Register)
 		authRoutes.GET("/me", authManager.AuthMiddleware(), authManager.GetMe)
 	}
 
@@ -130,7 +259,8 @@ func registerRoutes(r *gin.Engine, authManager *auth.AuthManager, fileManager *f
 	connRoutes := r.Group("/api/connections")
 	connRoutes.Use(authManager.AuthMiddleware())
 	{
-		connRoutes.POST("", func(c *gin.Context) {
+		// 创建连接 - 只有管理员可以创建
+		connRoutes.POST("", authManager.RoleMiddleware("admin"), func(c *gin.Context) {
 			var conn connection.Connection
 			if err := c.ShouldBindJSON(&conn); err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
@@ -142,20 +272,58 @@ func registerRoutes(r *gin.Engine, authManager *auth.AuthManager, fileManager *f
 			}
 			c.JSON(http.StatusCreated, conn)
 		})
+
+		// 获取连接列表 - 根据用户角色返回相应连接
 		connRoutes.GET("", func(c *gin.Context) {
-			conns := sshManager.GetConnections()
+			userID, _ := c.Get("user_id")
+			userRole, _ := c.Get("role")
+
+			var conns []connection.Connection
+			if userRole == "admin" {
+				conns = sshManager.GetConnections()
+			} else {
+				conns = authManager.GetUserConnections(userID.(string), sshManager)
+			}
+
 			c.JSON(http.StatusOK, conns)
 		})
+
+		// 获取单个连接 - 检查用户是否有权限访问
 		connRoutes.GET("/:id", func(c *gin.Context) {
 			id := c.Param("id")
+			userID, _ := c.Get("user_id")
+			userRole, _ := c.Get("role")
+
+			// 检查连接是否存在
 			conn, exists := sshManager.GetConnection(id)
 			if !exists {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Connection not found"})
 				return
 			}
+
+			// 管理员可以访问所有连接，非管理员需要检查权限
+			if userRole != "admin" {
+				// 获取用户有权限的连接
+				userConns := authManager.GetUserConnections(userID.(string), sshManager)
+				// 检查用户是否有权限访问该连接
+				hasPermission := false
+				for _, userConn := range userConns {
+					if userConn.ID == id {
+						hasPermission = true
+						break
+					}
+				}
+				if !hasPermission {
+					c.JSON(http.StatusForbidden, gin.H{"error": "Insufficient permissions"})
+					return
+				}
+			}
+
 			c.JSON(http.StatusOK, conn)
 		})
-		connRoutes.PUT("/:id", func(c *gin.Context) {
+
+		// 更新连接 - 只有管理员可以更新
+		connRoutes.PUT("/:id", authManager.RoleMiddleware("admin"), func(c *gin.Context) {
 			id := c.Param("id")
 			var conn connection.Connection
 			if err := c.ShouldBindJSON(&conn); err != nil {
@@ -168,16 +336,45 @@ func registerRoutes(r *gin.Engine, authManager *auth.AuthManager, fileManager *f
 			}
 			c.JSON(http.StatusOK, conn)
 		})
-		connRoutes.DELETE("/:id", func(c *gin.Context) {
+
+		// 删除连接 - 只有管理员可以删除
+		connRoutes.DELETE("/:id", authManager.RoleMiddleware("admin"), func(c *gin.Context) {
 			id := c.Param("id")
 			if err := sshManager.DeleteConnection(id); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
+			// 删除与该连接相关的所有权限
+			if err := authManager.DeleteUserPermissionsByConnection(id); err != nil {
+				log.Error("Failed to delete connection permissions: %v", err)
+			}
 			c.JSON(http.StatusOK, gin.H{"message": "Connection deleted"})
 		})
+
+		// 测试连接 - 检查用户是否有权限访问
 		connRoutes.POST("/:id/test", func(c *gin.Context) {
 			id := c.Param("id")
+			userID, _ := c.Get("user_id")
+			userRole, _ := c.Get("role")
+
+			// 管理员可以测试所有连接，非管理员需要检查权限
+			if userRole != "admin" {
+				// 获取用户有权限的连接
+				userConns := authManager.GetUserConnections(userID.(string), sshManager)
+				// 检查用户是否有权限访问该连接
+				hasPermission := false
+				for _, userConn := range userConns {
+					if userConn.ID == id {
+						hasPermission = true
+						break
+					}
+				}
+				if !hasPermission {
+					c.JSON(http.StatusForbidden, gin.H{"error": "Insufficient permissions"})
+					return
+				}
+			}
+
 			if err := sshManager.TestConnection(id); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
@@ -185,8 +382,8 @@ func registerRoutes(r *gin.Engine, authManager *auth.AuthManager, fileManager *f
 			c.JSON(http.StatusOK, gin.H{"message": "Connection test successful"})
 		})
 
-		// 测试未保存的连接
-		connRoutes.POST("/test", func(c *gin.Context) {
+		// 测试未保存的连接 - 只有管理员可以测试
+		connRoutes.POST("/test", authManager.RoleMiddleware("admin"), func(c *gin.Context) {
 			var conn connection.Connection
 			if err := c.ShouldBindJSON(&conn); err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
@@ -247,7 +444,8 @@ func registerRoutes(r *gin.Engine, authManager *auth.AuthManager, fileManager *f
 	oldSSHRoutes.Use(authManager.AuthMiddleware())
 	{
 		// 旧连接管理路由的重定向
-		oldSSHRoutes.POST("/connections", func(c *gin.Context) {
+		// 创建连接 - 只有管理员可以创建
+		oldSSHRoutes.POST("/connections", authManager.RoleMiddleware("admin"), func(c *gin.Context) {
 			var conn connection.Connection
 			if err := c.ShouldBindJSON(&conn); err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
@@ -263,20 +461,53 @@ func registerRoutes(r *gin.Engine, authManager *auth.AuthManager, fileManager *f
 			}
 			c.JSON(http.StatusCreated, conn)
 		})
+		// 获取连接列表 - 根据用户角色返回相应连接
 		oldSSHRoutes.GET("/connections", func(c *gin.Context) {
-			conns := sshManager.GetConnections()
+			userID, _ := c.Get("user_id")
+			userRole, _ := c.Get("role")
+
+			var conns []connection.Connection
+			if userRole == "admin" {
+				conns = sshManager.GetConnections()
+			} else {
+				conns = authManager.GetUserConnections(userID.(string), sshManager)
+			}
 			c.JSON(http.StatusOK, conns)
 		})
+		// 获取单个连接 - 检查用户是否有权限访问
 		oldSSHRoutes.GET("/connections/:id", func(c *gin.Context) {
 			id := c.Param("id")
+			userID, _ := c.Get("user_id")
+			userRole, _ := c.Get("role")
+
+			// 检查连接是否存在
 			conn, exists := sshManager.GetConnection(id)
 			if !exists {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Connection not found"})
 				return
 			}
+
+			// 管理员可以访问所有连接，非管理员需要检查权限
+			if userRole != "admin" {
+				// 获取用户有权限的连接
+				userConns := authManager.GetUserConnections(userID.(string), sshManager)
+				// 检查用户是否有权限访问该连接
+				hasPermission := false
+				for _, userConn := range userConns {
+					if userConn.ID == id {
+						hasPermission = true
+						break
+					}
+				}
+				if !hasPermission {
+					c.JSON(http.StatusForbidden, gin.H{"error": "Insufficient permissions"})
+					return
+				}
+			}
 			c.JSON(http.StatusOK, conn)
 		})
-		oldSSHRoutes.PUT("/connections/:id", func(c *gin.Context) {
+		// 更新连接 - 只有管理员可以更新
+		oldSSHRoutes.PUT("/connections/:id", authManager.RoleMiddleware("admin"), func(c *gin.Context) {
 			id := c.Param("id")
 			var conn connection.Connection
 			if err := c.ShouldBindJSON(&conn); err != nil {
@@ -293,16 +524,43 @@ func registerRoutes(r *gin.Engine, authManager *auth.AuthManager, fileManager *f
 			}
 			c.JSON(http.StatusOK, conn)
 		})
-		oldSSHRoutes.DELETE("/connections/:id", func(c *gin.Context) {
+		// 删除连接 - 只有管理员可以删除
+		oldSSHRoutes.DELETE("/connections/:id", authManager.RoleMiddleware("admin"), func(c *gin.Context) {
 			id := c.Param("id")
 			if err := sshManager.DeleteConnection(id); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
+			// 删除与该连接相关的所有权限
+			if err := authManager.DeleteUserPermissionsByConnection(id); err != nil {
+				log.Error("Failed to delete connection permissions: %v", err)
+			}
 			c.JSON(http.StatusOK, gin.H{"message": "Connection deleted"})
 		})
+		// 测试连接 - 检查用户是否有权限访问
 		oldSSHRoutes.POST("/connections/:id/test", func(c *gin.Context) {
 			id := c.Param("id")
+			userID, _ := c.Get("user_id")
+			userRole, _ := c.Get("role")
+
+			// 管理员可以测试所有连接，非管理员需要检查权限
+			if userRole != "admin" {
+				// 获取用户有权限的连接
+				userConns := authManager.GetUserConnections(userID.(string), sshManager)
+				// 检查用户是否有权限访问该连接
+				hasPermission := false
+				for _, userConn := range userConns {
+					if userConn.ID == id {
+						hasPermission = true
+						break
+					}
+				}
+				if !hasPermission {
+					c.JSON(http.StatusForbidden, gin.H{"error": "Insufficient permissions"})
+					return
+				}
+			}
+
 			if err := sshManager.TestConnection(id); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
@@ -310,12 +568,12 @@ func registerRoutes(r *gin.Engine, authManager *auth.AuthManager, fileManager *f
 			c.JSON(http.StatusOK, gin.H{"message": "Connection test successful"})
 		})
 
-		// 旧分类管理路由的重定向
+		// 旧分类管理路由的重定向 - 只有管理员可以操作
 		oldSSHRoutes.GET("/categories", func(c *gin.Context) {
 			categories := sshManager.GetCategories()
 			c.JSON(http.StatusOK, categories)
 		})
-		oldSSHRoutes.POST("/categories", func(c *gin.Context) {
+		oldSSHRoutes.POST("/categories", authManager.RoleMiddleware("admin"), func(c *gin.Context) {
 			var req struct {
 				Name string `json:"name" binding:"required"`
 			}
@@ -329,7 +587,7 @@ func registerRoutes(r *gin.Engine, authManager *auth.AuthManager, fileManager *f
 			}
 			c.JSON(http.StatusCreated, gin.H{"message": "Category added", "name": req.Name})
 		})
-		oldSSHRoutes.PUT("/categories/:name", func(c *gin.Context) {
+		oldSSHRoutes.PUT("/categories/:name", authManager.RoleMiddleware("admin"), func(c *gin.Context) {
 			oldName := c.Param("name")
 			var req struct {
 				NewName string `json:"new_name" binding:"required"`
@@ -344,7 +602,7 @@ func registerRoutes(r *gin.Engine, authManager *auth.AuthManager, fileManager *f
 			}
 			c.JSON(http.StatusOK, gin.H{"message": "Category updated", "old_name": oldName, "new_name": req.NewName})
 		})
-		oldSSHRoutes.DELETE("/categories/:name", func(c *gin.Context) {
+		oldSSHRoutes.DELETE("/categories/:name", authManager.RoleMiddleware("admin"), func(c *gin.Context) {
 			name := c.Param("name")
 			if err := sshManager.DeleteCategory(name); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -516,8 +774,13 @@ func registerRoutes(r *gin.Engine, authManager *auth.AuthManager, fileManager *f
 
 							// 缓存文件内容
 							taskManager.UpdateTaskContent(zipTaskID, zipContent)
-							// 更新任务状态和文件名
+							// 保存文件到默认下载目录
+							if err := saveFileToDefaultDir(cfg, fileName, zipContent); err != nil {
+								log.Error("Failed to save file to default directory: %s, error: %s", fileName, err.Error())
+							}
+							// 更新任务状态、文件名和下载路径
 							taskManager.UpdateTaskFileName(zipTaskID, fileName)
+							taskManager.UpdateTaskDownloadPath(zipTaskID, cfg.DefaultDownloadDir)
 							taskManager.UpdateTaskStatus(zipTaskID, task.TaskStatusCompleted)
 							log.Info("Zip task completed: %s", zipTaskID)
 						}()
@@ -547,8 +810,13 @@ func registerRoutes(r *gin.Engine, authManager *auth.AuthManager, fileManager *f
 
 				// 缓存文件内容
 				taskManager.UpdateTaskContent(taskID, content)
-				// 更新任务状态和文件名
+				// 保存文件到默认下载目录
+				if err := saveFileToDefaultDir(cfg, fileName, content); err != nil {
+					log.Error("Failed to save file to default directory: %s, error: %s", fileName, err.Error())
+				}
+				// 更新任务状态、文件名和下载路径
 				taskManager.UpdateTaskFileName(taskID, fileName)
+				taskManager.UpdateTaskDownloadPath(taskID, cfg.DefaultDownloadDir)
 				taskManager.UpdateTaskStatus(taskID, task.TaskStatusCompleted)
 				log.Info("Updated task %s to completed with fileName: %s, content cached: %d bytes", taskID, fileName, len(content))
 			}()
@@ -611,8 +879,13 @@ func registerRoutes(r *gin.Engine, authManager *auth.AuthManager, fileManager *f
 
 				// 缓存文件内容
 				taskManager.UpdateTaskContent(newTask.ID, zipContent)
-				// 更新任务状态和文件名
+				// 保存文件到默认下载目录
+				if err := saveFileToDefaultDir(cfg, zipFileName, zipContent); err != nil {
+					log.Error("Failed to save file to default directory: %s, error: %s", zipFileName, err.Error())
+				}
+				// 更新任务状态、文件名和下载路径
 				taskManager.UpdateTaskFileName(newTask.ID, zipFileName)
+				taskManager.UpdateTaskDownloadPath(newTask.ID, cfg.DefaultDownloadDir)
 				taskManager.UpdateTaskStatus(newTask.ID, task.TaskStatusCompleted)
 			}()
 
@@ -824,4 +1097,229 @@ func registerRoutes(r *gin.Engine, authManager *auth.AuthManager, fileManager *f
 			c.JSON(http.StatusOK, gin.H{"message": "Task deleted"})
 		})
 	}
+
+	// 配置管理路由 - 公开路由
+	publicConfigRoutes := r.Group("/api/config")
+	{
+		// 获取网站名称 - 公开访问
+		publicConfigRoutes.GET("/site-name", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{
+				"siteName": cfg.SiteName,
+			})
+		})
+	}
+
+	// 配置管理路由 - 需要认证
+	configRoutes := r.Group("/api/config")
+	configRoutes.Use(authManager.AuthMiddleware())
+	{
+		// 获取默认下载目录
+		configRoutes.GET("/download-dir", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{
+				"downloadDir": cfg.DefaultDownloadDir,
+			})
+		})
+
+		// 设置默认下载目录
+		configRoutes.POST("/download-dir", func(c *gin.Context) {
+			var req struct {
+				DownloadDir string `json:"downloadDir" binding:"required"`
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+				return
+			}
+
+			// 更新配置
+			cfg.DefaultDownloadDir = req.DownloadDir
+			c.JSON(http.StatusOK, gin.H{
+				"downloadDir": cfg.DefaultDownloadDir,
+				"message":     "Download directory updated successfully",
+			})
+		})
+
+		// 设置网站名称
+		configRoutes.POST("/site-name", func(c *gin.Context) {
+			var req struct {
+				SiteName string `json:"siteName" binding:"required"`
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+				return
+			}
+
+			// 更新配置
+			cfg.SiteName = req.SiteName
+			c.JSON(http.StatusOK, gin.H{
+				"siteName": cfg.SiteName,
+				"message":  "Site name updated successfully",
+			})
+		})
+	}
+
+	// 用户管理路由
+	userRoutes := r.Group("/api/users")
+	userRoutes.Use(authManager.AuthMiddleware(), authManager.RoleMiddleware("admin"))
+	{
+		// 获取所有用户
+		userRoutes.GET("", func(c *gin.Context) {
+			users := authManager.GetAllUsers()
+			c.JSON(http.StatusOK, gin.H{"users": users})
+		})
+
+		// 创建用户
+		userRoutes.POST("", func(c *gin.Context) {
+			var userReq struct {
+				Username string `json:"username" binding:"required"`
+				Password string `json:"password" binding:"required,min=6"`
+				Email    string `json:"email" binding:"required,email"`
+				Role     string `json:"role"`
+				Active   bool   `json:"active"`
+			}
+			if err := c.ShouldBindJSON(&userReq); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+				return
+			}
+
+			// 创建用户对象
+			user := &auth.User{
+				ID:        authManager.GenerateID(),
+				Username:  userReq.Username,
+				Password:  authManager.HashPassword(userReq.Password),
+				Email:     userReq.Email,
+				Role:      userReq.Role,
+				Active:    userReq.Active,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			}
+
+			// 设置默认值
+			if user.Role == "" {
+				user.Role = "user"
+			}
+			if user.Active == false {
+				user.Active = true
+			}
+
+			// 保存用户
+			if err := authManager.SaveUser(user); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusCreated, user)
+		})
+
+		// 获取单个用户
+		userRoutes.GET("/:id", func(c *gin.Context) {
+			userID := c.Param("id")
+			users := authManager.GetAllUsers()
+			for _, user := range users {
+				if user.ID == userID {
+					c.JSON(http.StatusOK, user)
+					return
+				}
+			}
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		})
+
+		// 更新用户
+		userRoutes.PUT("/:id", func(c *gin.Context) {
+			userID := c.Param("id")
+			var updatedUser auth.User
+			if err := c.ShouldBindJSON(&updatedUser); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+				return
+			}
+
+			if err := authManager.UpdateUser(userID, &updatedUser); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{"message": "User updated successfully"})
+		})
+
+		// 删除用户
+		userRoutes.DELETE("/:id", func(c *gin.Context) {
+			userID := c.Param("id")
+			if err := authManager.DeleteUser(userID); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{"message": "User deleted successfully"})
+		})
+	}
+
+	// 个人中心路由
+	profileRoutes := r.Group("/api/profile")
+	profileRoutes.Use(authManager.AuthMiddleware())
+	{
+		// 获取当前用户信息
+		profileRoutes.GET("", authManager.GetMe)
+
+		// 更新当前用户信息
+		profileRoutes.PUT("", func(c *gin.Context) {
+			userID, _ := c.Get("user_id")
+			var updatedUser auth.User
+			if err := c.ShouldBindJSON(&updatedUser); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+				return
+			}
+
+			if err := authManager.UpdateUser(userID.(string), &updatedUser); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{"message": "Profile updated successfully"})
+		})
+	}
+
+	// 连接权限管理路由
+	permissionRoutes := r.Group("/api/permissions")
+	permissionRoutes.Use(authManager.AuthMiddleware(), authManager.RoleMiddleware("admin"))
+	{
+		// 获取用户的连接权限
+		permissionRoutes.GET("/user/:userId", func(c *gin.Context) {
+			userID := c.Param("userId")
+			permissions := authManager.GetUserPermissions(userID)
+			c.JSON(http.StatusOK, gin.H{"permissions": permissions})
+		})
+
+		// 授予用户连接权限
+		permissionRoutes.POST("", func(c *gin.Context) {
+			var permission auth.UserConnectionPermission
+			if err := c.ShouldBindJSON(&permission); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+				return
+			}
+
+			if err := authManager.AddUserPermission(&permission); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusCreated, gin.H{"message": "Permission granted successfully", "permission": permission})
+		})
+
+		// 撤销用户连接权限
+		permissionRoutes.DELETE("/:id", func(c *gin.Context) {
+			permissionID := c.Param("id")
+			if err := authManager.DeleteUserPermission(permissionID); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{"message": "Permission revoked successfully"})
+		})
+	}
+
+	// 获取用户有权限的连接
+	connRoutes.GET("/authorized", authManager.AuthMiddleware(), func(c *gin.Context) {
+		userID, _ := c.Get("user_id")
+		connections := authManager.GetUserConnections(userID.(string), sshManager)
+		c.JSON(http.StatusOK, connections)
+	})
 }

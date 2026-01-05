@@ -47,8 +47,22 @@ func Migrate() error {
 	);
 	`
 
+	// 创建用户连接权限表
+	userConnectionPermissionSQL := `
+	CREATE TABLE IF NOT EXISTS user_connection_permissions (
+		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL,
+		connection_id TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+		FOREIGN KEY (connection_id) REFERENCES ssh_connections(id) ON DELETE CASCADE,
+		UNIQUE(user_id, connection_id)
+	);
+	`
+
 	// 执行创建表语句
-	createQueries := []string{userTableSQL, sshConnectionTableSQL, sshCategoryTableSQL}
+	createQueries := []string{userTableSQL, sshConnectionTableSQL, sshCategoryTableSQL, userConnectionPermissionSQL}
 	for _, query := range createQueries {
 		_, err := DB.Exec(query)
 		if err != nil {

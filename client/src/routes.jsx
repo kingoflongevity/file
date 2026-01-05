@@ -1,11 +1,13 @@
 import React from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import Login from './pages/Login';
-import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Connections from './pages/SSHConnections';
 import FileManager from './pages/FileManager';
 import Notifications from './pages/Notifications';
+import Settings from './pages/Settings';
+import Profile from './pages/Profile';
+import UserManagement from './pages/UserManagement';
 import NotFound from './pages/NotFound';
 import PrivateRoute from './components/PrivateRoute';
 import MainLayout from './components/MainLayout';
@@ -16,10 +18,6 @@ const router = createBrowserRouter([
   {
     path: '/login',
     element: <Login />,
-  },
-  {
-    path: '/register',
-    element: <Register />,
   },
   
   // 私有路由 - 需要认证
@@ -46,6 +44,18 @@ const router = createBrowserRouter([
           {
             path: 'notifications',
             element: <Notifications />,
+          },
+          {
+            path: 'settings',
+            element: <Settings />,
+          },
+          {
+            path: 'profile',
+            element: <Profile />,
+          },
+          {
+            path: 'users',
+            element: <UserManagement />,
           },
         ],
       },

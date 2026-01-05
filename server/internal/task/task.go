@@ -28,6 +28,7 @@ type Task struct {
 	Progress     int        `json:"progress"`     // 任务进度（0-100）
 	FileName     string     `json:"fileName"`     // 生成的文件名
 	FilePath     string     `json:"filePath"`     // 生成的文件完整路径
+	DownloadPath string     `json:"downloadPath"` // 文件下载路径，用于前端显示
 	ErrorMessage string     `json:"errorMessage"` // 错误信息
 	CreatedAt    time.Time  `json:"createdAt"`    // 任务创建时间
 	UpdatedAt    time.Time  `json:"updatedAt"`    // 任务更新时间
@@ -183,6 +184,24 @@ func (m *TaskManager) UpdateTaskContent(taskID string, content []byte) {
 	task.UpdatedAt = time.Now()
 
 	log.Info("Updated task content: %s, size: %d bytes", taskID, len(content))
+}
+
+// UpdateTaskDownloadPath 更新任务下载路径
+func (m *TaskManager) UpdateTaskDownloadPath(taskID string, downloadPath string) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	task, exists := m.tasks[taskID]
+	if !exists {
+		log.Warn("Task not found: %s", taskID)
+		return
+	}
+
+	// 更新下载路径
+	task.DownloadPath = downloadPath
+	task.UpdatedAt = time.Now()
+
+	log.Info("Updated task download path: %s, path: %s", taskID, downloadPath)
 }
 
 // UpdateTaskError 更新任务错误信息

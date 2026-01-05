@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { isElectron } from '../utils/electron';
 import {
   Layout,
   Avatar,
@@ -28,6 +29,7 @@ import {
   ClockCircleOutlined,
   ExclamationCircleOutlined,
   DeleteOutlined,
+  FolderOutlined,
 } from '@ant-design/icons';
 import { taskApi } from '../services/api';
 
@@ -38,14 +40,58 @@ const MainLayout = () => {
   const { token } = theme.useToken();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState(null);
+  const [siteName, setSiteName] = useState('远程连接文件管理');
 
   // 获取当前用户信息
-  const user = JSON.parse(localStorage.getItem('user'));
+  useEffect(() => {
+    const fetchUser = () => {
+      const userData = localStorage.getItem('user');
+      if (userData) {
+        const parsedUser = JSON.parse(userData);
+        console.log('获取到用户信息:', parsedUser);
+        console.log('用户角色:', parsedUser.role);
+        setUser(parsedUser);
+      }
+    };
+
+    // 初始获取
+    fetchUser();
+
+    // 监听storage变化，确保用户信息实时更新
+    window.addEventListener('storage', fetchUser);
+
+    return () => {
+      window.removeEventListener('storage', fetchUser);
+    };
+  }, []);
+
+  // 获取网站名称并监听更新
+  useEffect(() => {
+    // 从localStorage获取保存的网站名称
+    const savedSiteName = localStorage.getItem('siteName');
+    if (savedSiteName) {
+      setSiteName(savedSiteName);
+    }
+
+    // 监听网站名称更新事件
+    const handleSiteNameUpdate = (event) => {
+      setSiteName(event.detail);
+    };
+
+    // 监听自定义事件
+    window.addEventListener('siteNameUpdated', handleSiteNameUpdate);
+
+    return () => {
+      window.removeEventListener('siteNameUpdated', handleSiteNameUpdate);
+    };
+  }, []);
 
   // 处理登出
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    setUser(null);
     navigate('/login');
   };
 
@@ -124,12 +170,41 @@ const MainLayout = () => {
     }
   };
 
+  // 处理菜单点击事件
+  const handleMenuClick = ({ key }) => {
+    switch (key) {
+      case 'dashboard':
+        navigate('/');
+        break;
+      case 'connections':
+        navigate('/connections');
+        break;
+      case 'profile':
+        navigate('/profile');
+        break;
+      case 'settings':
+        navigate('/settings');
+        break;
+      case 'users':
+        navigate('/users');
+        break;
+      case 'theme-toggle':
+        window.themeContext?.toggleTheme?.();
+        break;
+      case 'logout':
+        handleLogout();
+        break;
+      default:
+        break;
+    }
+  };
+
   // 用户菜单 - 包含导航和设置选项
   const userMenu = [
     {
       key: 'dashboard',
       label: (
-        <div className="flex items-center" onClick={() => navigate('/')}>
+        <div className="flex items-center">
           <DashboardOutlined className="mr-2" />
           <span>仪表盘</span>
         </div>
@@ -138,7 +213,7 @@ const MainLayout = () => {
     {
       key: 'connections',
       label: (
-        <div className="flex items-center" onClick={() => navigate('/connections')}>
+        <div className="flex items-center">
           <DatabaseOutlined className="mr-2" />
           <span>连接管理</span>
         </div>
@@ -165,10 +240,20 @@ const MainLayout = () => {
         </div>
       ),
     },
+    // 管理员专用菜单
+    {
+      key: 'users',
+      label: (
+        <div className="flex items-center">
+          <UserOutlined className="mr-2" />
+          <span>用户管理</span>
+        </div>
+      ),
+    },
     {
       key: 'theme-toggle',
       label: (
-        <div className="flex items-center" onClick={() => window.themeContext?.toggleTheme?.()}>
+        <div className="flex items-center">
           <div className="mr-2">
             {window.themeContext?.isDarkTheme ? (
               <span>🌞</span>
@@ -188,7 +273,7 @@ const MainLayout = () => {
       label: (
         <div className="flex items-center text-red-600">
           <LogoutOutlined className="mr-2" />
-          <span onClick={handleLogout}>退出登录</span>
+          <span>退出登录</span>
         </div>
       ),
     },
@@ -206,18 +291,22 @@ const MainLayout = () => {
         style={{
           background: token.colorBgContainer,
           boxShadow: '0 2px 8px rgba(0, 21, 41, 0.08)',
-          padding: '0 24px',
+          padding: '0 12px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          position: 'relative',
+          zIndex: 1000,
+          flexWrap: 'wrap',
+          minHeight: 64,
         }}
       >
         {/* 页面标题 */}
-        <div style={{ fontSize: '18px', fontWeight: '600', color: token.colorPrimary }}>
-          远程连接文件管理
+        <div style={{ fontSize: '16px', fontWeight: '600', color: token.colorPrimary, whiteSpace: 'nowrap' }}>
+          {siteName}
         </div>
 
-        <Space>
+        <Space size="middle">
           {/* 通知按钮 */}
           <Tooltip title="通知">
             <Dropdown
@@ -279,16 +368,23 @@ const MainLayout = () => {
                                     <span>{task.createdAt ? new Date(task.createdAt).toLocaleString() : ''}</span>
                                     <Space size="small">
                                       {task.status === 'completed' && (
+                                        <span style={{ fontSize: 12, color: '#666' }}>
+                                          文件已下载到默认目录: {task.downloadPath || '默认下载目录'}
+                                        </span>
+                                      )}
+                                      {task.status === 'completed' && isElectron() && (
                                         <Button 
                                           type="link" 
                                           size="small" 
-                                          icon={<DownloadOutlined />}
-                                          onClick={() => {
-                                            const token = localStorage.getItem('token');
-                                            window.open(`http://localhost:8082/api/tasks/${task.id}/download?token=${token}`, '_blank');
+                                          icon={<FolderOutlined />}
+                                          onClick={async () => {
+                                            const ipcRenderer = window.require('electron').ipcRenderer;
+                                            if (ipcRenderer) {
+                                              await ipcRenderer.invoke('open-download-dir');
+                                            }
                                           }}
                                         >
-                                          下载
+                                          打开文件所在目录
                                         </Button>
                                       )}
                                       <Button 
@@ -337,15 +433,22 @@ const MainLayout = () => {
                 <Button
                   type="text"
                   icon={<BellOutlined />}
-                  style={{ fontSize: '18px' }}
+                  style={{ fontSize: '18px', cursor: 'pointer' }}
                 />
               </Badge>
             </Dropdown>
           </Tooltip>
 
           {/* 用户头像下拉菜单 */}
-          <Dropdown menu={{ items: userMenu }} placement="bottomRight">
-            <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+          <Dropdown 
+            menu={{ 
+              items: userMenu, 
+              onClick: handleMenuClick 
+            }} 
+            placement="bottomRight"
+            trigger={['click']}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', padding: '4px 8px', borderRadius: 4, transition: 'background-color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = token.colorBgElevated} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
               <Avatar
                 size="default"
                 style={{
@@ -363,14 +466,18 @@ const MainLayout = () => {
 
       {/* 页面内容 */}
       <Content
+        className="main-content"
         style={{
-          padding: 24,
+          padding: '24px',
           margin: 0,
           minHeight: 280,
           background: token.colorBgContainer,
+          transition: 'padding 0.3s ease-in-out',
         }}
       >
-        <Outlet />
+        <div className="page-transition">
+          <Outlet />
+        </div>
       </Content>
     </Layout>
   );

@@ -17,8 +17,10 @@ import {
   ExclamationCircleOutlined,
   LeftOutlined,
   DeleteOutlined,
+  FolderOutlined,
 } from '@ant-design/icons';
 import { taskApi } from '../services/api';
+import { isElectron, getIpcRenderer } from '../utils/electron';
 
 const Notifications = () => {
   const navigate = useNavigate();
@@ -154,16 +156,23 @@ const Notifications = () => {
                     <span>{task.createdAt ? new Date(task.createdAt).toLocaleString() : ''}</span>
                     <Space size="small">
                       {task.status === 'completed' && (
+                        <span style={{ fontSize: 12, color: '#666' }}>
+                          文件已下载到默认目录: {task.downloadPath || '默认下载目录'}
+                        </span>
+                      )}
+                      {task.status === 'completed' && isElectron() && (
                         <Button 
                           type="link" 
                           size="small" 
-                          icon={<DownloadOutlined />}
-                          onClick={() => {
-                            const token = localStorage.getItem('token');
-                            window.open(`http://localhost:8082/api/tasks/${task.id}/download?token=${token}`, '_blank');
+                          icon={<FolderOutlined />}
+                          onClick={async () => {
+                            const ipcRenderer = getIpcRenderer();
+                            if (ipcRenderer) {
+                              await ipcRenderer.invoke('open-download-dir');
+                            }
                           }}
                         >
-                          下载
+                          打开文件所在目录
                         </Button>
                       )}
                       <Button 

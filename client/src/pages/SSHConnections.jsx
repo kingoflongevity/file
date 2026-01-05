@@ -386,18 +386,19 @@ const Connections = () => {
   ];
 
   return (
-    <div style={{ padding: 24 }}>
+    <div>
       {/* 页面标题和操作按钮 */}
-      <Card style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Card className="hover-scale" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <div>
-          <Title level={2} style={{ margin: 0 }}>连接管理</Title>
+          <Title level={2} style={{ margin: 0, fontSize: 'clamp(18px, 4vw, 24px)' }}>连接管理</Title>
           <Text type="secondary">管理您的远程连接配置</Text>
         </div>
           <Button
             type="primary"
             icon={<PlusOutlined />}
             onClick={openAddModal}
+            className="hover-scale"
           >
             添加连接
           </Button>
@@ -483,23 +484,27 @@ const Connections = () => {
         </div>
         
         {/* SSH连接列表 */}
-        <Table
-          columns={columns}
-          dataSource={filteredConnections}
-          rowKey="id"
-          loading={isLoading}
-          bordered
-          pagination={false}
-          locale={{
-                  emptyText: (
-                    <div style={{ textAlign: 'center', padding: 40 }}>
-                      <DatabaseOutlined style={{ fontSize: 48, color: '#ccc', marginBottom: 16 }} />
-                      <p>没有连接</p>
-                      <p>点击"添加连接"按钮创建您的第一个连接</p>
-                    </div>
-                  )
-                }}
-        />
+        <div style={{ overflowX: 'auto', borderRadius: 8, border: '1px solid #f0f0f0' }}>
+          <Table
+            columns={columns}
+            dataSource={filteredConnections}
+            rowKey="id"
+            loading={isLoading}
+            bordered={false}
+            pagination={false}
+            scroll={{ x: 'max-content' }}
+            className="connections-table"
+            locale={{
+                    emptyText: (
+                      <div style={{ textAlign: 'center', padding: 40 }}>
+                        <DatabaseOutlined style={{ fontSize: 48, color: '#ccc', marginBottom: 16 }} />
+                        <p>没有连接</p>
+                        <p>点击"添加连接"按钮创建您的第一个连接</p>
+                      </div>
+                    )
+                  }}
+          />
+        </div>
       </Card>
 
       {/* 添加/编辑连接模态框 */}

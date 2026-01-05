@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/joho/godotenv"
@@ -26,6 +27,12 @@ type Config struct {
 
 	// SSH配置
 	MaxSSHConnections int
+
+	// 下载配置
+	DefaultDownloadDir string
+
+	// 网站配置
+	SiteName string
 }
 
 // LoadConfig 加载配置
@@ -54,15 +61,25 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("invalid MAX_SSH_CONNECTIONS: %v", err)
 	}
 
+	// 获取用户主目录，用于设置默认下载目录
+	userHome, err := os.UserHomeDir()
+	if err != nil {
+		// 如果获取失败，使用当前目录
+		userHome = "."
+	}
+	defaultDownloadDir := filepath.Join(userHome, "Downloads", "RemoteFileManager")
+
 	// 构建配置
 	cfg := &Config{
-		Port:              port,
-		LogLevel:          getEnv("LOG_LEVEL", "info"),
-		JWTSecret:         getEnv("JWT_SECRET", "your-secret-key-change-me"),
-		JWTExpiresIn:      jwtExpires,
-		PasswordSalt:      getEnv("PASSWORD_SALT", "your-very-secure-password-salt-change-me-now"),
-		DBPath:            getEnv("DB_PATH", "./data.db"),
-		MaxSSHConnections: maxSSHConn,
+		Port:               port,
+		LogLevel:           getEnv("LOG_LEVEL", "info"),
+		JWTSecret:          getEnv("JWT_SECRET", "your-secret-key-change-me"),
+		JWTExpiresIn:       jwtExpires,
+		PasswordSalt:       getEnv("PASSWORD_SALT", "your-very-secure-password-salt-change-me-now"),
+		DBPath:             getEnv("DB_PATH", "./data.db"),
+		MaxSSHConnections:  maxSSHConn,
+		DefaultDownloadDir: getEnv("DEFAULT_DOWNLOAD_DIR", defaultDownloadDir),
+		SiteName:           getEnv("SITE_NAME", "远程连接文件管理"),
 	}
 
 	return cfg, nil

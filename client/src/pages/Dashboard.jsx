@@ -34,26 +34,28 @@ const Dashboard = () => {
   };
 
   return (
-    <div style={{ padding: 24 }}>
+    <div>
       {/* 页面标题和添加连接按钮 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 'bold', margin: 0 }}>服务器连接</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+        <h1 style={{ fontSize: 'clamp(20px, 5vw, 28px)', fontWeight: 'bold', margin: 0 }}>服务器连接</h1>
         <Button 
           type="primary" 
           icon={<PlusOutlined />} 
           onClick={handleAddConnection}
+          className="hover-scale"
         >
           添加SSH连接
         </Button>
       </div>
 
       {/* 服务器连接列表 */}
-      <Card>
+      <Card className="hover-scale">
         {isLoading ? (
           <Skeleton active paragraph={{ rows: 5 }} />
         ) : connections.length > 0 ? (
           <List
             dataSource={connections}
+            className="connections-list"
             renderItem={(item) => (
               <List.Item
                 actions={[
@@ -74,7 +76,7 @@ const Dashboard = () => {
                       <Avatar icon={<DatabaseOutlined />} />
                     </Badge>
                   }
-                  title={<span style={{ fontWeight: 'bold', fontSize: 16 }}>{item.name}</span>}
+                  title={<span style={{ fontWeight: 'bold', fontSize: 'clamp(14px, 3vw, 16px)' }}>{item.name}</span>}
                   description={`${item.username}@${item.host}:${item.port}`}
                 />
               </List.Item>
@@ -90,6 +92,7 @@ const Dashboard = () => {
                   type="primary" 
                   icon={<PlusOutlined />} 
                   onClick={handleAddConnection}
+                  className="hover-scale"
                 >
                   添加第一个SSH连接
                 </Button>

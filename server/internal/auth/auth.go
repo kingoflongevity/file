@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"remote-file-manager/internal/config"
+	"remote-file-manager/internal/connection"
 	"remote-file-manager/internal/log"
 
 	"github.com/gin-gonic/gin"
@@ -32,6 +33,15 @@ type User struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// UserConnectionPermission 用户连接权限
+type UserConnectionPermission struct {
+	ID           string    `json:"id"`
+	UserID       string    `json:"user_id"`
+	ConnectionID string    `json:"connection_id"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
 // Claims JWT声明
 type Claims struct {
 	UserID   string `json:"user_id"`
@@ -42,19 +52,150 @@ type Claims struct {
 
 // AuthManager 认证管理器
 type AuthManager struct {
-	cfg           *config.Config
-	users         map[string]*User
-	usersDir      string
-	encryptionKey []byte
+	cfg            *config.Config
+	users          map[string]*User
+	usersDir       string
+	encryptionKey  []byte
+	permissions    map[string]*UserConnectionPermission
+	permissionsDir string
+}
+
+// permissionFilePath 获取权限文件路径
+func (m *AuthManager) permissionFilePath() string {
+	return filepath.Join(m.permissionsDir, "permissions.json")
+}
+
+// loadPermissions 加载所有权限
+func (m *AuthManager) loadPermissions() {
+	// 创建权限目录
+	if err := os.MkdirAll(m.permissionsDir, 0755); err != nil {
+		log.Error("Failed to create permissions directory: %v", err)
+		return
+	}
+
+	// 读取权限文件
+	content, err := ioutil.ReadFile(m.permissionFilePath())
+	if err != nil {
+		// 文件不存在，初始化空权限
+		if os.IsNotExist(err) {
+			m.permissions = make(map[string]*UserConnectionPermission)
+			return
+		}
+		log.Error("Failed to read permissions file: %v", err)
+		return
+	}
+
+	// 解析权限数据
+	var permissions []*UserConnectionPermission
+	if err := json.Unmarshal(content, &permissions); err != nil {
+		log.Error("Failed to unmarshal permissions: %v", err)
+		return
+	}
+
+	// 添加到内存
+	for _, perm := range permissions {
+		m.permissions[perm.ID] = perm
+	}
+}
+
+// savePermissions 保存所有权限
+func (m *AuthManager) savePermissions() error {
+	// 转换为切片
+	permissions := make([]*UserConnectionPermission, 0, len(m.permissions))
+	for _, perm := range m.permissions {
+		permissions = append(permissions, perm)
+	}
+
+	// 保存到文件
+	file, err := os.Create(m.permissionFilePath())
+	if err != nil {
+		return fmt.Errorf("failed to create permissions file: %v", err)
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(permissions); err != nil {
+		return fmt.Errorf("failed to encode permissions: %v", err)
+	}
+
+	return nil
+}
+
+// GetUserPermissions 获取用户的所有权限
+func (m *AuthManager) GetUserPermissions(userID string) []*UserConnectionPermission {
+	permissions := make([]*UserConnectionPermission, 0)
+	for _, perm := range m.permissions {
+		if perm.UserID == userID {
+			permissions = append(permissions, perm)
+		}
+	}
+	return permissions
+}
+
+// AddUserPermission 添加用户连接权限
+func (m *AuthManager) AddUserPermission(permission *UserConnectionPermission) error {
+	// 生成ID
+	permission.ID = m.GenerateID()
+	permission.CreatedAt = time.Now()
+	permission.UpdatedAt = time.Now()
+
+	// 添加到内存
+	m.permissions[permission.ID] = permission
+
+	// 保存到文件
+	return m.savePermissions()
+}
+
+// DeleteUserPermission 删除用户连接权限
+func (m *AuthManager) DeleteUserPermission(permissionID string) error {
+	// 检查权限是否存在
+	if _, exists := m.permissions[permissionID]; !exists {
+		return fmt.Errorf("permission not found: %s", permissionID)
+	}
+
+	// 从内存中删除
+	delete(m.permissions, permissionID)
+
+	// 保存到文件
+	return m.savePermissions()
+}
+
+// DeleteUserPermissionsByConnection 删除指定连接的所有权限
+func (m *AuthManager) DeleteUserPermissionsByConnection(connectionID string) error {
+	// 查找并删除所有相关权限
+	for id, perm := range m.permissions {
+		if perm.ConnectionID == connectionID {
+			delete(m.permissions, id)
+		}
+	}
+
+	// 保存到文件
+	return m.savePermissions()
+}
+
+// DeleteUserPermissionsByUser 删除指定用户的所有权限
+func (m *AuthManager) DeleteUserPermissionsByUser(userID string) error {
+	// 查找并删除所有相关权限
+	for id, perm := range m.permissions {
+		if perm.UserID == userID {
+			delete(m.permissions, id)
+		}
+	}
+
+	// 保存到文件
+	return m.savePermissions()
 }
 
 // NewAuthManager 创建认证管理器
 func NewAuthManager(cfg *config.Config) *AuthManager {
 	manager := &AuthManager{
-		cfg:           cfg,
-		users:         make(map[string]*User),
-		usersDir:      "./users",
-		encryptionKey: []byte(cfg.PasswordSalt[:32]), // 使用密码盐作为加密密钥
+		cfg:            cfg,
+		users:          make(map[string]*User),
+		usersDir:       "./users",
+		permissions:    make(map[string]*UserConnectionPermission),
+		permissionsDir: "./permissions",
+		encryptionKey:  []byte(cfg.PasswordSalt[:32]), // 使用密码盐作为加密密钥
 	}
 
 	// 创建用户目录
@@ -62,8 +203,16 @@ func NewAuthManager(cfg *config.Config) *AuthManager {
 		log.Error("Failed to create users directory: %v", err)
 	}
 
+	// 创建权限目录
+	if err := os.MkdirAll(manager.permissionsDir, 0755); err != nil {
+		log.Error("Failed to create permissions directory: %v", err)
+	}
+
 	// 加载现有用户
 	manager.loadUsers()
+
+	// 加载现有权限
+	manager.loadPermissions()
 
 	// 如果没有用户，创建默认管理员
 	if len(manager.users) == 0 {
@@ -139,9 +288,9 @@ func (m *AuthManager) Register(c *gin.Context) {
 
 	// 创建新用户
 	user := &User{
-		ID:        m.generateID(),
+		ID:        m.GenerateID(),
 		Username:  registerReq.Username,
-		Password:  m.hashPassword(registerReq.Password),
+		Password:  m.HashPassword(registerReq.Password),
 		Email:     registerReq.Email,
 		Role:      "user", // 默认角色
 		Active:    true,
@@ -150,7 +299,7 @@ func (m *AuthManager) Register(c *gin.Context) {
 	}
 
 	// 保存用户
-	if err := m.saveUser(user); err != nil {
+	if err := m.SaveUser(user); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 		return
 	}
@@ -322,8 +471,8 @@ func (m *AuthManager) parseToken(tokenString string) (*Claims, error) {
 	return claims, nil
 }
 
-// hashPassword 密码哈希
-func (m *AuthManager) hashPassword(password string) string {
+// HashPassword 密码哈希
+func (m *AuthManager) HashPassword(password string) string {
 	// 使用MD5哈希密码（实际项目中应使用更安全的哈希算法如bcrypt）
 	hash := md5.Sum([]byte(password + m.cfg.PasswordSalt))
 	return hex.EncodeToString(hash[:])
@@ -331,11 +480,11 @@ func (m *AuthManager) hashPassword(password string) string {
 
 // verifyPassword 验证密码
 func (m *AuthManager) verifyPassword(password, hashedPassword string) bool {
-	return m.hashPassword(password) == hashedPassword
+	return m.HashPassword(password) == hashedPassword
 }
 
-// generateID 生成唯一ID
-func (m *AuthManager) generateID() string {
+// GenerateID 生成唯一ID
+func (m *AuthManager) GenerateID() string {
 	// 生成随机ID
 	b := make([]byte, 16)
 	rand.Read(b)
@@ -385,8 +534,8 @@ func (m *AuthManager) loadUsers() {
 	}
 }
 
-// saveUser 保存用户
-func (m *AuthManager) saveUser(user *User) error {
+// SaveUser 保存用户
+func (m *AuthManager) SaveUser(user *User) error {
 	// 更新时间
 	user.UpdatedAt = time.Now()
 
@@ -410,12 +559,121 @@ func (m *AuthManager) saveUser(user *User) error {
 	return nil
 }
 
+// GetAllUsers 获取所有用户
+func (m *AuthManager) GetAllUsers() []*User {
+	users := make([]*User, 0, len(m.users))
+	for _, user := range m.users {
+		users = append(users, user)
+	}
+	return users
+}
+
+// UpdateUser 更新用户信息
+func (m *AuthManager) UpdateUser(userID string, updatedUser *User) error {
+	// 检查用户是否存在
+	user, exists := m.users[userID]
+	if !exists {
+		return fmt.Errorf("user not found: %s", userID)
+	}
+
+	// 更新用户信息
+	if updatedUser.Username != "" && updatedUser.Username != user.Username {
+		// 检查用户名是否已存在
+		if _, exists := m.getUserByUsername(updatedUser.Username); exists {
+			return fmt.Errorf("username already exists: %s", updatedUser.Username)
+		}
+		user.Username = updatedUser.Username
+	}
+
+	if updatedUser.Email != "" {
+		user.Email = updatedUser.Email
+	}
+
+	if updatedUser.Password != "" {
+		user.Password = m.HashPassword(updatedUser.Password)
+	}
+
+	if updatedUser.Role != "" {
+		user.Role = updatedUser.Role
+	}
+
+	user.Active = updatedUser.Active
+	user.UpdatedAt = time.Now()
+
+	// 保存更新后的用户
+	return m.SaveUser(user)
+}
+
+// DeleteUser 删除用户
+func (m *AuthManager) DeleteUser(userID string) error {
+	// 检查用户是否存在
+	if _, exists := m.users[userID]; !exists {
+		return fmt.Errorf("user not found: %s", userID)
+	}
+
+	// 删除用户文件
+	filename := filepath.Join(m.usersDir, userID+".json")
+	if err := os.Remove(filename); err != nil {
+		return fmt.Errorf("failed to delete user file: %v", err)
+	}
+
+	// 删除用户的所有权限
+	if err := m.DeleteUserPermissionsByUser(userID); err != nil {
+		log.Error("Failed to delete user permissions: %v", err)
+	}
+
+	// 从内存中删除用户
+	delete(m.users, userID)
+
+	return nil
+}
+
+// GetUserConnections 获取用户有权限访问的连接
+func (m *AuthManager) GetUserConnections(userID string, connManager *connection.ConnectionManager) []connection.Connection {
+	// 如果是管理员，返回所有连接
+	user, exists := m.users[userID]
+	if !exists {
+		return []connection.Connection{}
+	}
+
+	if user.Role == "admin" {
+		return connManager.GetConnections()
+	}
+
+	// 非管理员用户，只返回有权限的连接
+	// 获取用户的所有权限
+	permissions := m.GetUserPermissions(userID)
+	if len(permissions) == 0 {
+		return []connection.Connection{}
+	}
+
+	// 获取所有连接
+	allConnections := connManager.GetConnections()
+	// 过滤出用户有权限的连接
+	var userConnections []connection.Connection
+	permissionMap := make(map[string]bool)
+
+	// 构建权限映射
+	for _, perm := range permissions {
+		permissionMap[perm.ConnectionID] = true
+	}
+
+	// 过滤连接
+	for _, conn := range allConnections {
+		if permissionMap[conn.ID] {
+			userConnections = append(userConnections, conn)
+		}
+	}
+
+	return userConnections
+}
+
 // createDefaultAdmin 创建默认管理员用户
 func (m *AuthManager) createDefaultAdmin() {
 	admin := &User{
-		ID:        m.generateID(),
+		ID:        m.GenerateID(),
 		Username:  "admin",
-		Password:  m.hashPassword("admin123"),
+		Password:  m.HashPassword("admin123"),
 		Email:     "admin@example.com",
 		Role:      "admin",
 		Active:    true,
@@ -423,7 +681,7 @@ func (m *AuthManager) createDefaultAdmin() {
 		UpdatedAt: time.Now(),
 	}
 
-	if err := m.saveUser(admin); err != nil {
+	if err := m.SaveUser(admin); err != nil {
 		log.Error("Failed to create default admin: %v", err)
 		return
 	}

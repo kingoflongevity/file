@@ -1,26 +1,11 @@
 appId: com.file-manager.ssh
 productName: 远程文件管理
-copyright: Copyright © 2024
 files:
   - electron/**/*
   - client/dist/**/*
+extraResources:
+  - dist/server-windows.exe
 directories:
   output: dist
-  buildResources: build
-linux:
-  target:
-    - AppImage
-    - deb
-  maintainer: remote-file-manager
-  category: Utility
 win:
-  target:
-    - nsis
-  icon: build/icon.ico
-nsis:
-  oneClick: true
-  perMachine: true
-  allowElevation: true
-  createDesktopShortcut: always
-  createStartMenuShortcut: true
-  shortcutName: 远程文件管理器
+  target: portable

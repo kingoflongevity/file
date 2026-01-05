@@ -3,15 +3,21 @@ module remote-file-manager
 go 1.25.5
 
 require (
+	github.com/asticode/go-astikit v0.57.1
+	github.com/asticode/go-astilectron v0.30.0
 	github.com/gin-gonic/gin v1.11.0
 	github.com/golang-jwt/jwt/v4 v4.5.2
+	github.com/jlaffaye/ftp v0.2.0
 	github.com/joho/godotenv v1.5.1
+	github.com/pkg/sftp v1.13.10
 	golang.org/x/crypto v0.46.0
+	modernc.org/sqlite v1.42.2
 )
 
+// 替换AWS SDK依赖为一个空实现，避免其在构建时被包含
+replace github.com/aws/aws-sdk-go => github.com/aws/aws-sdk-go v1.0.0-00010101000000-000000000000
+
 require (
-	github.com/asticode/go-astikit v0.57.1 // indirect
-	github.com/asticode/go-astilectron v0.30.0 // indirect
 	github.com/bytedance/sonic v1.14.0 // indirect
 	github.com/bytedance/sonic/loader v0.3.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
@@ -26,18 +32,15 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
-	github.com/jlaffaye/ftp v0.2.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/mattn/go-sqlite3 v1.14.33 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421 // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
-	github.com/pkg/sftp v1.13.10 // indirect
 	github.com/quic-go/qpack v0.5.1 // indirect
 	github.com/quic-go/quic-go v0.54.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
@@ -56,5 +59,4 @@ require (
 	modernc.org/libc v1.66.10 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
-	modernc.org/sqlite v1.42.2 // indirect
 )

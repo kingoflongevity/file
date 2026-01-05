@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { fileApi, sshApi } from '../services/api';
+import { isElectron } from '../utils/electron';
 import {
   Card, 
   Breadcrumb, 
@@ -62,6 +63,8 @@ const FileManager = () => {
   // 下载相关状态
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
+  const [downloadingFiles, setDownloadingFiles] = useState([]);
+  const [downloadPath, setDownloadPath] = useState('');
   
   // 监听窗口大小变化
   useEffect(() => {
@@ -270,17 +273,38 @@ const FileManager = () => {
   // 处理文件下载
   const handleDownload = async (file) => {
     try {
+      // 添加到下载文件列表
+      setDownloadingFiles(prev => [...prev, file.name]);
+      
       const response = await fileApi.downloadFile(connId, file.path);
-      // 如果返回的是任务ID，说明创建了压缩任务
+      
+      // 如果返回的是任务ID，说明创建了下载任务
       if (response && response.taskId) {
         message.success('下载任务已创建，请查看通知');
+        // 设置默认下载路径提示
+        if (isElectron()) {
+          setDownloadPath('默认下载目录');
+        }
       } else {
         // 单个文件下载成功
         message.success('文件下载开始');
       }
+      
+      // 2秒后从下载列表中移除，模拟下载完成
+      setTimeout(() => {
+        setDownloadingFiles(prev => prev.filter(name => name !== file.name));
+        if (downloadingFiles.length <= 1) {
+          setDownloadPath('');
+        }
+      }, 2000);
     } catch (err) {
       console.error('下载文件失败:', err);
       message.error(err.message || '下载文件失败');
+      // 从下载列表中移除
+      setDownloadingFiles(prev => prev.filter(name => name !== file.name));
+      if (downloadingFiles.length <= 1) {
+        setDownloadPath('');
+      }
     }
   };
 
@@ -294,6 +318,15 @@ const FileManager = () => {
     try {
       setIsDownloading(true);
       setDownloadProgress(0);
+      
+      // 添加到下载文件列表
+      const fileNames = selectedFiles.map(file => file.name);
+      setDownloadingFiles(prev => [...prev, ...fileNames]);
+      
+      // 设置默认下载路径提示
+      if (isElectron()) {
+        setDownloadPath('默认下载目录');
+      }
 
       // 逐个下载文件，使用Promise.allSettled确保所有文件都被处理
       const downloadPromises = selectedFiles.map((file, index) => {
@@ -323,6 +356,12 @@ const FileManager = () => {
         messageText += `，${failed} 个文件下载失败`;
       }
       message.success(messageText);
+      
+      // 2秒后从下载列表中移除，模拟下载完成
+      setTimeout(() => {
+        setDownloadingFiles(prev => prev.filter(name => !fileNames.includes(name)));
+        setDownloadPath('');
+      }, 2000);
     } catch (err) {
       console.error('批量下载失败:', err);
       message.error(err.message || '批量下载失败');
@@ -658,14 +697,35 @@ const FileManager = () => {
         </Spin>
       </Card>
 
-      {/* 下载进度条 */}
-      {isDownloading && (
+      {/* 下载状态显示 */}
+      {(isDownloading || downloadingFiles.length > 0) && (
         <Card style={{ margin: 16, marginBottom: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
             <span>下载进度</span>
             <span>{downloadProgress}%</span>
           </div>
           <Progress percent={downloadProgress} status="active" />
+          
+          {downloadingFiles.length > 0 && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
+                正在下载:
+              </div>
+              <div style={{ fontSize: 12, color: '#333', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {downloadingFiles.map((name, index) => (
+                  <span key={index} style={{ backgroundColor: '#f0f0f0', padding: '2px 8px', borderRadius: 12 }}>
+                    {name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {downloadPath && (
+            <div style={{ marginTop: 8, fontSize: 12, color: '#1890ff' }}>
+              下载位置: {downloadPath}
+            </div>
+          )}
         </Card>
       )}
 
