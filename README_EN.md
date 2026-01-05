@@ -1,5 +1,9 @@
 # 🌐 Remote Connection File Management System
 
+<div align="right">
+  <a href="README.md" target="_blank">中文</a>
+</div>
+
 ## 📖 Project Introduction
 
 Remote Connection File Management System is a powerful cross-platform file management tool that supports multiple remote connection protocols and provides an intuitive web interface for users to manage files on remote servers.
@@ -25,16 +29,16 @@ Remote Connection File Management System is a powerful cross-platform file manag
 ![Dashboard](screenshots/dashboard.png)
 
 ### Connection Management
-<!-- ![Connection Management](screenshots/connection-management.png) -->
+![Connection Management](screenshots/connection-management.png)
 
 ### File Management
-<!-- ![File Management](screenshots/file-manager.png) -->
+![File Management](screenshots/file-manager.png)
 
 ### Task Management
-<!-- ![Task Management](screenshots/task-management.png) -->
+![Task Management](screenshots/task-management.png)
 
 ### Settings Interface
-<!-- ![Settings Interface](screenshots/settings.png) -->
+![Settings Interface](screenshots/settings.png)
 
 ## 🔌 Supported Server Types
 

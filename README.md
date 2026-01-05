@@ -1,5 +1,9 @@
 # 🌐 远程连接文件管理系统
 
+<div align="right">
+  <a href="README_EN.md" target="_blank">English</a>
+</div>
+
 ## 📖 项目简介
 
 远程连接文件管理系统是一款功能强大的跨平台文件管理工具，支持多种远程连接协议，提供直观的Web界面，方便用户管理远程服务器上的文件。
@@ -25,16 +29,16 @@
 ![仪表板](screenshots/dashboard.png)
 
 ### 连接管理
-<!-- ![连接管理](screenshots/connection-management.png) -->
+![连接管理](screenshots/connection-management.png)
 
 ### 文件管理
-<!-- ![文件管理](screenshots/file-manager.png) -->
+![文件管理](screenshots/file-manager.png)
 
 ### 任务管理
-<!-- ![任务管理](screenshots/task-management.png) -->
+![任务管理](screenshots/task-management.png)
 
 ### 设置界面
-<!-- ![设置界面](screenshots/settings.png) -->
+![设置界面](screenshots/settings.png)
 
 ## 🔌 支持的服务器类型
 
